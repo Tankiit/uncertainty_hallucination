@@ -1,0 +1,66 @@
+# ---- Model weights / checkpoints ----
+*.pt
+*.pth
+*.bin
+*.safetensors
+*.ckpt
+*.gguf
+*.onnx
+
+# ---- Hugging Face cache ----
+.cache/
+hf_cache/
+*.cache/
+
+# ---- Output caches (hidden states, latents) ----
+outputs/
+latent_cache/
+
+# ---- Downloaded Modal-volume cells (logits shards + index.parquet); regenerable via `modal volume get` ----
+cells/
+*.parquet
+
+# ---- Derived / regenerable analysis dumps ----
+ensemble_lp_*.json
+
+# ---- Markdown docs (ignore all except README.md) ----
+*.md
+!README.md
+
+# ---- Experiment results (large JSON) ----
+results_*.pt
+
+# ---- Logs ----
+*.log
+
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.egg
+dist/
+build/
+.eggs/
+
+# ---- Virtual envs ----
+.venv/
+venv/
+env/
+.env
+
+# ---- Jupyter ----
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# ---- Editor / OS ----
+.vscode/
+.idea/
+.DS_Store
+*.swp
+*~
+
+# ---- Misc ----
+*.npy
+*.npz
+wandb/
+.mlruns/
