@@ -111,6 +111,8 @@ def defects():
          "all 500 replicates identical -> **every CI zero-width**, printed as if real"),
         ("A1 verdict averaged over tau",
          "`size_only` is EXACTLY tau-invariant (argmax is tau-free), so this compared a tau-averaged W to a tau-constant baseline"),
+        ("`dispersion` parquet filename omits K, tau grid, and seed grid",
+         "a smoke or ablation run silently overwrites the paper-setting A1 parquet for that cell"),
         ("`o.attentions` indexed with `keep`",
          "hidden_states has L+1 entries, attentions has L -> IndexError; layer 0 has no attention row"),
         ("Empty answer span for unpaired cells",

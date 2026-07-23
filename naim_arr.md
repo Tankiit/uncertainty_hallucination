@@ -58,26 +58,48 @@ The functions that produce the underlying data are real Modal functions in
 `analyse_hf.py`:
 
 ```
-modal run analyse_hf.py::dispersion --model=<model> --dataset=<dataset>
+modal run analyse_hf.py::dispersion --model=<model> --dataset=<dataset> \
+  --arm=correct --n-clusters=200 --taus=5,10,25 --seeds=0,1,2
 modal run analyse_hf.py::uq_panel --model=<model> --dataset=<dataset>
 modal run analyse_hf.py::uq_panel_correctness --model=<model> --dataset=<dataset>
 ```
 
+Use the current checked-in `analyse_hf.py`. Two handoff-blocking wiring defects
+have been corrected:
+
+- `dispersion` now defaults to `arm=correct`, matching the stored paired
+  extraction. The previous `arm=main` default crashed with
+  `no states for arm='main'`. You may pass `--arm=correct` explicitly for
+  auditability.
+- All three functions now print `##### model / dataset` before their report.
+  This is the block delimiter consumed by `compile_all.py`; the older
+  `uq_panel` stdout lacked it and was silently ignored by the parser.
+
 across the 3 models (`llama3_8b`, `mistral_7b`, `qwen2_5_7b`) × the
 disagreement datasets (`chaosnli`, `chaosnli_alpha`, `pavlick_nli`) for the
-first two, and whatever cells `correctness_panel` is gated to for the
-third (its own docstring says it's the correctness-task analogue, 15
-cells per the note about `layer_sweep`).
+first two. Run the correctness panel across the 3 models × 5 accuracy datasets
+(`halueval_qa`, `truthfulqa`, `ambigqa_kge2`, `medqa`, `pubmedqa`), for 15
+cells total.
 
-**What I could NOT trace, and you'll need to figure out or ask about:**
-`uq_panel`/`uq_panel_correctness` write `.parquet` files to
-`/vol/derived/`, not the `.log` text format `compile_all.py` actually
-reads. I did not find the conversion step between the two in this pass —
-either there's a formatting script I didn't locate, or the `.log` files
-were produced by hand from Modal's console output, or `report()`/`cells()`
-need a small extension to emit that format. Don't guess at this — report
-back what you find rather than inventing a converter that might not match
-whatever `compile_all.py` actually expects.
+**Output bridge (resolved):** the three analysis functions write
+machine-readable `.parquet` files to `/vol/derived/` and now emit textual
+blocks beginning with `##### model / dataset`. That delimiter is the format
+`compile_all.py` reads for the panel logs. Concatenate the nine disagreement
+blocks into `a1_pooled.log` and `uq_panel.log`, and the 15 accuracy blocks into
+`correctness_panel.log`. Modal lifecycle lines may be discarded; do not
+recompute, round differently, or otherwise change the numerical report while
+assembling the logs.
+
+**Important overwrite hazard:** the dispersion parquet filename records the
+layer and pooling scheme but omits `n_clusters`, `taus`, and `seeds`. A smoke
+test or ablation therefore overwrites the paper-setting parquet for that cell
+without warning. Do not run reduced configurations against the shared volume.
+For regeneration, retain the registered defaults (`n_clusters=200`,
+`seeds=0,1,2`) and explicitly pass the A1 panel grid `--taus=5,10,25`.
+Do **not** rely on the function's current `0.5,1,2` default: that is the
+low-temperature structural diagnostic, not the 27-row ARR panel. This defect is
+recorded in `compile_all.py::defects()`; do not silently rename or reinterpret
+existing artifacts.
 
 **Step 2 — multiplicity correction.** `a1()` in `compile_all.py` prints
 its own caveat: *"Multiplicity is uncorrected across 27 rows."* Apply a
@@ -115,8 +137,8 @@ claim — that's Tanmoy's call once he has the corrected numbers.
 - Don't pick which of the 3-vs-2 counts is "right" without being able to
 explain why — surfacing the mechanism is the job, not picking a winner.
 - Don't build a new `.log`-generation step that changes what any existing
-number means — if the parquet→log gap needs a real conversion script,
-flag it as a design decision rather than inventing the format.
+number means. The output bridge is now the existing `#####` textual report;
+only remove Modal lifecycle lines and concatenate blocks.
 - Carry the ChaosNLI licensing note forward if any ChaosNLI text ends up
 in anything shared: `defects()` already flags it as recorded incorrectly
 (CC-BY-SA-4.0 in the metadata, actually CC Non-Commercial 4.0 per

@@ -51,8 +51,8 @@ def load_states(root, meta, layer, arm, scheme):
     if not vecs:
         raise RuntimeError(
             f"no states for arm={arm!r} layer={layer} in {root}. "
-            f"Available arms are set at extraction time; a disagreement cell "
-            f"uses 'main'.")
+            f"Available arms are set at extraction time; the current paired "
+            f"extractions use 'correct' and 'wrong'.")
     o = np.argsort(ids)
     return np.asarray(ids)[o], np.stack(vecs)[o]
 
@@ -181,13 +181,14 @@ def _signals(m, sizes):
 @app.function(image=image, volumes={"/vol": vol}, timeout=60 * 60 * 2)
 def dispersion(model: str, dataset: str, scheme: str = "span_mean",
                layer: int = -1, n_clusters: int = 200, taus: str = "0.5,1,2",
-               seeds: str = "0,1,2", arm: str = "main"):
+               seeds: str = "0,1,2", arm: str = "correct"):
     import numpy as np, pandas as pd
     from sklearn.cluster import KMeans
     from scipy.stats import spearmanr
 
     root = _root(model, dataset); meta = _meta(root)
     assert has_dispersion(meta), f"{dataset} is not a disagreement cell"
+    print(f"\n##### {model} / {dataset}")
     if layer < 0:
         layer = meta["n_total_layers"] + 1 + layer
     assert layer in meta["captured_layers"],\
@@ -316,6 +317,7 @@ def uq_panel(model: str, dataset: str, scheme: str = "span_mean",
 
     root = _root(model, dataset); meta = _meta(root)
     assert has_dispersion(meta), f"{dataset} is not a disagreement cell"
+    print(f"\n##### {model} / {dataset}")
     if layer < 0:
         layer = meta["n_total_layers"] + 1 + layer
 
@@ -429,6 +431,7 @@ def uq_panel_correctness(model: str, dataset: str, scheme: str = "span_mean",
     from sklearn.neighbors import NearestNeighbors
 
     root = _root(model, dataset); meta = _meta(root)
+    print(f"\n##### {model} / {dataset}")
     if layer < 0:
         layer = meta["n_total_layers"] + 1 + layer
     idx = _index(root)
