@@ -1,0 +1,40 @@
+✓ Initialized. View run at 
+https://modal.com/apps/cril-nlp/main/ap-dr8kMCO1PDDWHtWLgJhP9j
+✓ Created objects.
+├── 🔨 Created mount 
+│   /media/naim/encrypted_drive/project/uncertainty_hallucination/analyse_hf.py
+├── 🔨 Created function dispersion.
+├── 🔨 Created function uq_panel.
+├── 🔨 Created function uq_panel_correctness.
+├── 🔨 Created function ensemble_disagreement.
+├── 🔨 Created function layer_sweep.
+├── 🔨 Created function decoder_frame.
+├── 🔨 Created function report.
+└── 🔨 Created function cells.
+
+##### llama3_8b / chaosnli
+3000 items | layer=32 arm=correct tau=10.0
+
+metric             group          rho               95% CI    |rho|
+size_only          density    -0.2014 [-0.2354,-0.1676]   0.2014
+credal_width       mass       -0.1974 [-0.2328,-0.1638]   0.1974
+knn_dist           density    +0.1968 [+0.1616,+0.2332]   0.1968
+one_minus_max      mass       -0.0645 [-0.1005,-0.0271]   0.0645
+mass_entropy       mass       +0.0592 [+0.0229,+0.0957]   0.0592
+pred_entropy       token      +0.0415 [+0.0071,+0.0784]   0.0415
+neg_mean_logprob   token      -0.0188 [-0.0546,+0.0147]   0.0188
+pred_margin        token      -0.0104 [-0.0446,+0.0235]   0.0104
+pred_maxprob       token      +0.0070 [-0.0281,+0.0414]   0.0070
+
+=== credal_width vs each baseline (paired bootstrap of the difference in |rho|) ===
+  vs mass_entropy       gain=+0.1383 [+0.1141,+0.1620]  W better
+  vs one_minus_max      gain=+0.1330 [+0.0761,+0.1909]  W better
+  vs size_only          gain=-0.0040 [-0.0198,+0.0135]  tie
+  vs knn_dist           gain=+0.0006 [-0.0107,+0.0114]  tie
+  vs pred_entropy       gain=+0.1559 [+0.1339,+0.1773]  W better
+  vs pred_maxprob       gain=+0.1904 [+0.1427,+0.2092]  W better
+  vs pred_margin        gain=+0.1870 [+0.1253,+0.2201]  W better
+  vs neg_mean_logprob   gain=+0.1786 [+0.1124,+0.2241]  W better
+Stopping app - local entrypoint completed.
+✓ App completed. View run at 
+https://modal.com/apps/cril-nlp/main/ap-dr8kMCO1PDDWHtWLgJhP9j

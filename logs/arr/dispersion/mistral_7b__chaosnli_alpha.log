@@ -1,0 +1,29 @@
+✓ Initialized. View run at 
+https://modal.com/apps/cril-nlp/main/ap-x0MDKXT9QN2UH2wOjwYXNQ
+✓ Created objects.
+├── 🔨 Created mount 
+│   /media/naim/encrypted_drive/project/uncertainty_hallucination/analyse_hf.py
+├── 🔨 Created function dispersion.
+├── 🔨 Created function uq_panel.
+├── 🔨 Created function uq_panel_correctness.
+├── 🔨 Created function ensemble_disagreement.
+├── 🔨 Created function layer_sweep.
+├── 🔨 Created function decoder_frame.
+├── 🔨 Created function cells.
+└── 🔨 Created function report.
+
+##### mistral_7b / chaosnli_alpha
+1532 items | H=(1532, 4096) | layer=32 arm=correct
+  annot-entropy mean=0.2872 std=0.2182  pcts 0/5/25/50/75/95/100 = 0.000/-0.000/0.098/0.227/0.471/0.680/0.693
+  frac within +/-0.1 of median: 0.343  (high => concentrated target, rho is weakly identified)
+
+=== per-tau verdict (never averaged over tau) ===
+Stopping app - local entrypoint completed.
+   tau  med max_m  r(W,size)    rho(W)  rho(size)     gain      pooled 95% CI  seedSD  status
+  5.00     0.8961     0.9961   +0.0111    +0.0055  +0.0078 [-0.0067,+0.0140]  0.0035  UNINFORMATIVE (W == size_only algebraically)
+ 10.00     0.3174     0.9725   +0.0206    +0.0055  +0.0184 [-0.0088,+0.0317]  0.0097  tie -> W is a size readout (CI spans 0)
+ 25.00     0.0404     0.8214   +0.0126    +0.0055  +0.0087 [-0.0191,+0.0307]  0.0063  tie -> W is a size readout (CI spans 0)
+
+informative taus (max-mass <= 0.90 AND r(W,size_only) <= 0.98): [10.0, 25.0]
+✓ App completed. View run at 
+https://modal.com/apps/cril-nlp/main/ap-x0MDKXT9QN2UH2wOjwYXNQ

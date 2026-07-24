@@ -1,0 +1,29 @@
+✓ Initialized. View run at 
+https://modal.com/apps/cril-nlp/main/ap-RbodE4ihrolGIEuslmH9u7
+✓ Created objects.
+├── 🔨 Created mount 
+│   /media/naim/encrypted_drive/project/uncertainty_hallucination/analyse_hf.py
+├── 🔨 Created function dispersion.
+├── 🔨 Created function uq_panel.
+├── 🔨 Created function uq_panel_correctness.
+├── 🔨 Created function ensemble_disagreement.
+├── 🔨 Created function layer_sweep.
+├── 🔨 Created function decoder_frame.
+├── 🔨 Created function report.
+└── 🔨 Created function cells.
+
+##### qwen2_5_7b / chaosnli
+3000 items | H=(3000, 3584) | layer=28 arm=correct
+  annot-entropy mean=0.6548 std=0.2281  pcts 0/5/25/50/75/95/100 = 0.000/0.224/0.517/0.685/0.807/1.004/1.098
+  frac within +/-0.1 of median: 0.379  (high => concentrated target, rho is weakly identified)
+
+Stopping app - local entrypoint completed.
+=== per-tau verdict (never averaged over tau) ===
+   tau  med max_m  r(W,size)    rho(W)  rho(size)     gain      pooled 95% CI  seedSD  status
+  5.00     0.4494     0.9832   -0.2527    -0.2203  +0.0323 [+0.0252,+0.0396]  0.0083  UNINFORMATIVE (W == size_only algebraically)
+ 10.00     0.1971     0.9382   -0.2605    -0.2203  +0.0402 [+0.0294,+0.0509]  0.0146  W BEATS density null (pooled CI>0, all seeds agree)
+ 25.00     0.0655     0.7462   -0.2551    -0.2203  +0.0348 [+0.0209,+0.0478]  0.0263  W BEATS density null (pooled CI>0, all seeds agree)
+
+informative taus (max-mass <= 0.90 AND r(W,size_only) <= 0.98): [10.0, 25.0]
+✓ App completed. View run at 
+https://modal.com/apps/cril-nlp/main/ap-RbodE4ihrolGIEuslmH9u7

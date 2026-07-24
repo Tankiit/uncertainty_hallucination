@@ -1,0 +1,29 @@
+✓ Initialized. View run at 
+https://modal.com/apps/cril-nlp/main/ap-g44Ego9AmmDvnccfaDLol2
+✓ Created objects.
+├── 🔨 Created mount 
+│   /media/naim/encrypted_drive/project/uncertainty_hallucination/analyse_hf.py
+├── 🔨 Created function dispersion.
+├── 🔨 Created function uq_panel.
+├── 🔨 Created function uq_panel_correctness.
+├── 🔨 Created function ensemble_disagreement.
+├── 🔨 Created function layer_sweep.
+├── 🔨 Created function decoder_frame.
+├── 🔨 Created function report.
+└── 🔨 Created function cells.
+
+##### llama3_8b / pavlick_nli
+496 items | H=(496, 4096) | layer=32 arm=correct
+  annot-entropy mean=0.9193 std=0.4176  pcts 0/5/25/50/75/95/100 = 0.000/0.168/0.612/1.019/1.255/1.463/1.584
+  frac within +/-0.1 of median: 0.153  (high => concentrated target, rho is weakly identified)
+
+Stopping app - local entrypoint completed.
+=== per-tau verdict (never averaged over tau) ===
+   tau  med max_m  r(W,size)    rho(W)  rho(size)     gain      pooled 95% CI  seedSD  status
+  5.00     0.1402     0.8650   -0.0062    +0.0024  -0.0127 [-0.0441,+0.0391]  0.0183  tie -> W is a size readout (CI spans 0)
+ 10.00     0.0494     0.5599   +0.0063    +0.0024  -0.0186 [-0.0522,+0.0444]  0.0147  tie -> W is a size readout (CI spans 0)
+ 25.00     0.0201     0.4209   -0.0082    +0.0024  -0.0167 [-0.0503,+0.0501]  0.0082  tie -> W is a size readout (CI spans 0)
+
+informative taus (max-mass <= 0.90 AND r(W,size_only) <= 0.98): [5.0, 10.0, 25.0]
+✓ App completed. View run at 
+https://modal.com/apps/cril-nlp/main/ap-g44Ego9AmmDvnccfaDLol2
