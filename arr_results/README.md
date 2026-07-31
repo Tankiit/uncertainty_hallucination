@@ -16,6 +16,7 @@ Results of the ARR **human-disagreement** pipeline, run 2026-07-31 over
 | `data/ladder_bh.csv` | Nested partial correlations `knn→size→credal`, BH-corrected (18 rows). |
 | `data/family_bh.csv` | Paired REPR-vs-OUTPUT family test, BH-corrected (9 rows). |
 | `data/sign_stability.csv` | ρ(signal, H) across τ∈{5,10,25} for the ladder signals (81 rows). |
+| `data/components.csv` | Target decomposed into log k (support) and balance; ρ of every signal with each (81 rows). |
 | `data/neighbourhood.csv` | Neighbourhood reads + cross-fitted oracle ceiling (ρ and R²) per cell × k. |
 
 ## Headline
@@ -28,6 +29,7 @@ Results of the ARR **human-disagreement** pipeline, run 2026-07-31 over
 | 04 | **family split** | **cut from abstract** — significant but flips across models within Pavlick |
 | 05 | sign_stability | stable — credal_width's negative sign holds across τ where it carries signal |
 | 06 | neighbourhood | oracle ceiling (0.41–0.70) exceeds the built signals (~0.2–0.4); binary α ceiling ≈ 0 |
+| 07 | **components** | **rejected** — credal_width tracks balance as much as support size on Pavlick; not a pure size readout |
 
 **Through-line:** the representation-vs-output framing is real where it's clean
 (the ChaosNLI / α task contrast, certified by the fold) and honestly broken
@@ -53,8 +55,9 @@ modal run arr_modal.py::fold_gold      --model=… --dataset=chaosnli_alpha
 modal run arr_modal.py::ladder         --model=… --dataset=…
 modal run arr_modal.py::family         --model=… --dataset=…
 modal run arr_modal.py::sign_stability --model=… --dataset=…
+modal run arr_modal.py::components     --model=… --dataset=…  # H = log k · balance
 modal run arr_modal.py::neighbourhood  --model=… --dataset=…
-modal run arr_modal.py::collect                              # BH within panel
+modal run arr_modal.py::collect                              # BH + component verdict
 ```
 
 All of the above depend on Patch 1 (`analyse_hf.uq_panel` writing

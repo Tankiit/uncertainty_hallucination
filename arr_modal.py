@@ -71,6 +71,12 @@ PRIMARY_TARGET = "h_plugin"  # FROZEN 2026-07-31. Primary target = plug-in
                            #   Shannon, what every existing number uses (no
                            #   drift). h_norm and h_mm are robustness rows;
                            #   audit_target reports all three.
+MIN_FRAC = 0.02            # FROZEN 2026-07-31. decompose: a label counts toward
+                           #   the effective support k iff its annotator mass
+                           #   exceeds this. At Pavlick's median 28.5 annotators
+                           #   2% is under one vote, so k there is effectively
+                           #   "labels with any mass" -- components reports k's
+                           #   reliability per dataset rather than papering over it.
 # --------------------------------------------------------------------------
 
 
@@ -757,6 +763,123 @@ def family(model: str, dataset: str, layer: int = -1,
     return row
 
 
+def decompose_target(counts, min_frac=MIN_FRAC):
+    """Split annotator entropy into support size and balance.
+
+    H = log(k) * balance, where k is the effective support (labels whose
+    annotator mass exceeds min_frac) and balance = H / log(k) is normalised
+    entropy within that support (in [0, 1]). Both are permutation-invariant,
+    so canonicalisation of the label column does not matter here.
+
+    `counts` is an iterable of per-item annotator count vectors (ragged is
+    fine). Returns (log_k, balance, k, n_annot) as float arrays aligned to it.
+
+    min_frac is FROZEN pre-registration (MIN_FRAC). It is a threshold on a
+    small sample: at Pavlick's median 28.5 annotators, 2% is under one vote,
+    so k there is effectively "labels with any mass" and noisier than on
+    ChaosNLI. component_panel reports k's reliability per dataset.
+
+    Caveat (k bias): k is itself a plug-in estimate, biased downward at small
+    annotator counts (unseen labels never enter the support). This is the same
+    Miller-Madow problem, now inside the decomposition. On Pavlick, check
+    whether the h_mm target reorders the components before trusting the numbers
+    -- audit_target already emits h_mm per cell.
+    """
+    import numpy as np
+    log_k, balance, kk, nn = [], [], [], []
+    for c in counts:
+        c = np.asarray(c, float).ravel()
+        N = c.sum()
+        p = c / max(N, 1e-12)
+        H = float(-(p * np.log(np.clip(p, 1e-12, None))).sum())
+        k = int((p > min_frac).sum())
+        k = max(k, 1)
+        lk = float(np.log(k)) if k > 1 else 0.0
+        log_k.append(lk)
+        balance.append(H / lk if lk > 0 else 0.0)
+        kk.append(k); nn.append(float(N))
+    return (np.asarray(log_k), np.asarray(balance),
+            np.asarray(kk), np.asarray(nn))
+
+
+def component_panel(scores, counts):
+    """rho(signal, log k) and rho(signal, balance) for all signals in a cell.
+
+    Returns one row per signal. The cross-cell verdict is applied in collect.
+
+    PRE-REGISTER (checked in collect over the real-signal cells):
+      credal_width is CONFIRMED a support-size readout if
+        |rho(W, log k)| > 2 * |rho(W, balance)|  AND  rho(W, log k) < 0
+      in a majority of real-signal cells (|rho(W, H)| >= NULL_THRESHOLD and
+      log k actually varies). Rejected otherwise -- and say so plainly.
+    """
+    import numpy as np
+    log_k, balance, k, N = decompose_target(counts)
+    # H recomputed here only to flag which cells carry real signal downstream.
+    rows = []
+    for s, v in scores.items():
+        rows.append(dict(signal=s,
+                         rho_logk=_rho(v, log_k),
+                         rho_balance=_rho(v, balance)))
+    meta = dict(logk_std=float(np.std(log_k)),
+                k_median=float(np.median(k)),
+                n_annot_median=float(np.median(N)),
+                frac_k_ge2=float(np.mean(k >= 2)))
+    return rows, meta
+
+
+@app.function(image=image, volumes={"/vol": vol}, timeout=60 * 60)
+def components(model: str, dataset: str, layer: int = -1,
+               scheme: str = "span_mean", n_clusters: int = 200,
+               tau: float = 10.0, seeds: str = "0,1,2"):
+    """Decompose the target into log k (support size) and balance, then
+    correlate every signal with each. Tests the "credal_width is a size
+    readout" reframe directly: a size readout tracks log k, not balance.
+    """
+    import numpy as np, pandas as pd
+    scores, ent, ids = _load_peritem(model, dataset, layer, scheme,
+                                     n_clusters, tau, seeds)
+    idx = pd.read_parquet(f"{_root(model, dataset)}/index.parquet")
+    col = ("soft_labels" if "soft_labels" in idx.columns
+           else "annotator_labels" if "annotator_labels" in idx.columns else None)
+    if col is None:
+        raise RuntimeError("index.parquet carries no soft_labels/annotator_labels")
+    cmap = {}
+    for iid, raw in zip(idx.item_id, idx[col]):
+        v = json.loads(raw) if isinstance(raw, str) else raw
+        cmap[int(iid)] = np.asarray(v, float).ravel()
+    miss = [int(i) for i in ids if int(i) not in cmap]
+    if miss:
+        raise KeyError(f"{len(miss)} dump ids absent from index, e.g. {miss[:5]}")
+    counts = [cmap[int(i)] for i in ids]
+
+    rows, meta = component_panel(scores, counts)
+    df = pd.DataFrame(rows)
+    df["model"] = model; df["dataset"] = dataset
+    df["rho_H"] = [_rho(scores[s], ent) for s in df.signal]
+    for kk, vv in meta.items():
+        df[kk] = vv
+
+    print(f"\n##### components {model} / {dataset}  "
+          f"(k median={meta['k_median']:.0f}, log k std={meta['logk_std']:.3f}, "
+          f"n_annot median={meta['n_annot_median']:.0f}, "
+          f"frac k>=2={meta['frac_k_ge2']:.2f})")
+    print(df[["signal", "rho_logk", "rho_balance", "rho_H"]].round(4).to_string(index=False))
+    w = df[df.signal == "credal_width"].iloc[0]
+    size_readout = abs(w.rho_logk) > 2 * abs(w.rho_balance) and w.rho_logk < 0
+    real = abs(w.rho_H) >= NULL_THRESHOLD and meta["logk_std"] > 1e-6
+    print(f"W: |rho(logk)|={abs(w.rho_logk):.3f}  2|rho(balance)|="
+          f"{2*abs(w.rho_balance):.3f}  -> "
+          f"{'SIZE READOUT' if size_readout else 'not size-dominated'}"
+          f"{'' if real else '  (cell not real-signal; excluded from verdict)'}")
+    df.to_parquet(f"{_dst(model, dataset)}/arr_components_{model}__{dataset}"
+                  f"_L{layer}_{scheme}_K{n_clusters}_tau{tau}"
+                  f"_s{seeds.replace(',', '-')}.parquet")
+    vol.commit()
+    return dict(model=model, dataset=dataset, size_readout=bool(size_readout),
+                real_signal=bool(real))
+
+
 @app.function(image=image, volumes={"/vol": vol}, timeout=60 * 30)
 def collect(alpha: float = 0.05):
     """Gather every arr_* parquet on the volume and apply BH per panel.
@@ -782,6 +905,26 @@ def collect(alpha: float = 0.05):
         print(f"\n===== {kind}: {len(df)} rows, BH at alpha={alpha} =====")
         print(df.to_string(index=False))
         df.to_parquet(f"{DERIVED}/arr_{kind}_corrected.parquet")
+
+    # component decomposition: the credal_width size-readout verdict, applied
+    # over the real-signal cells only (pre-registered in component_panel).
+    fs = sorted(glob.glob(f"{DERIVED}/*/arr_components_*.parquet"))
+    if fs:
+        df = pd.concat([pd.read_parquet(f) for f in fs], ignore_index=True)
+        w = df[df.signal == "credal_width"].copy()
+        w["real"] = (w.rho_H.abs() >= NULL_THRESHOLD) & (w.logk_std > 1e-6)
+        w["size_readout"] = (w.rho_logk.abs() > 2 * w.rho_balance.abs()) & (w.rho_logk < 0)
+        real = w[w.real]
+        n_conf = int(real.size_readout.sum())
+        print(f"\n===== components: credal_width decomposition =====")
+        print(w[["model", "dataset", "rho_logk", "rho_balance", "rho_H",
+                 "logk_std", "real", "size_readout"]].round(4).to_string(index=False))
+        verdict = ("CONFIRMED" if n_conf > len(real) / 2 else "REJECTED")
+        print(f"size-readout in {n_conf}/{len(real)} real-signal cells -> "
+              f"credal_width as a support-size readout: {verdict}")
+        df.to_parquet(f"{DERIVED}/arr_components_all.parquet")
+    else:
+        print("[components] nothing on the volume yet")
     vol.commit()
 
 
