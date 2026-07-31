@@ -37,6 +37,9 @@ image = (modal.Image.debian_slim(python_version="3.11")
 # analyse_hf's loaders (load_states/_meta/_index) rather than a second copy of
 # the pooling + keep-intersection logic that would eventually drift from it.
 nbhd_image = image.pip_install("safetensors").add_local_python_source("analyse_hf")
+# ce_decomp reads realised_logprob from the logits shards -> needs safetensors.
+# Logic mirrors arr/decompose_target.py (kept as the reference/importable copy).
+ce_image = image.pip_install("safetensors")
 
 CELLS = "/vol/hf/cells"
 DERIVED = "/vol/derived"
@@ -71,6 +74,11 @@ PRIMARY_TARGET = "h_plugin"  # FROZEN 2026-07-31. Primary target = plug-in
                            #   Shannon, what every existing number uses (no
                            #   drift). h_norm and h_mm are robustness rows;
                            #   audit_target reports all three.
+EU_MARGIN = 0.05           # FROZEN 2026-07-31. ce_decomp: credal_width "tracks
+                           #   EU" if |rho(W,EU)| > |rho(W,AU)| + EU_MARGIN. The
+                           #   sign of rho(W,EU) is the finding (+ = width
+                           #   predicts a worse forecast; - = inverted vs
+                           #   epistemic uncertainty). See arr/decompose_target.py.
 MIN_FRAC = 0.02            # FROZEN 2026-07-31. decompose: a label counts toward
                            #   the effective support k iff its annotator mass
                            #   exceeds this. At Pavlick's median 28.5 annotators
@@ -932,6 +940,83 @@ def components(model: str, dataset: str, layer: int = -1,
     vol.commit()
     return dict(model=model, dataset=dataset, size_readout=bool(size_readout),
                 real_signal=bool(real), confounded=confounded)
+
+
+@app.function(image=ce_image, volumes={"/vol": vol}, timeout=60 * 60)
+def ce_decomp(model: str, dataset: str = "chaosnli_alpha",
+              layer: int = -1, scheme: str = "span_mean", n_clusters: int = 200,
+              tau: float = 10.0, seeds: str = "0,1,2", pool: str = "mean"):
+    """AU/EU decomposition against the SAME signals (Baan et al., answered).
+
+    CE(p_human, p_model) = H(p_human) + KL(p_human || p_model)
+        AU = H(p_human)   (the panel's only target)   EU = KL   (never examined)
+
+    Only the two-arm binary cell (chaosnli_alpha) is clean from what's on the
+    volume: correct+wrong ARE the label set. chaosnli/pavlick need a
+    label->token map that was not extracted -- see arr/decompose_target.py.
+
+    GATE: corr(AU, EU) is printed first. If |corr| is high the split separates
+    nothing. Output-family EU correlations are partly CIRCULAR (those signals
+    and EU are both functions of p_model); the representation family is clean.
+    """
+    if dataset not in BINARY_DATASETS:
+        raise ValueError(f"{dataset} is not binary; p_model over the full label "
+                         f"set is not on the volume (see arr/decompose_target.py)")
+    import numpy as np, pandas as pd, glob as _glob
+    from safetensors import safe_open
+    root = _root(model, dataset)
+    idx = pd.read_parquet(f"{root}/index.parquet")
+    soft = {int(i): np.asarray(json.loads(s) if isinstance(s, str) else s, float)
+            for i, s in zip(idx.item_id, idx.soft_labels)}
+    rl = {"correct": {}, "wrong": {}}
+    for p in sorted(_glob.glob(f"{root}/logits/shard-*.safetensors")):
+        with safe_open(p, framework="np") as f:
+            for k in f.keys():
+                i, a, fld = k.split(".")
+                if fld == "realised_logprob":
+                    rl[a][int(i)] = np.asarray(f.get_slice(k)[:], float)
+    ids = sorted(set(rl["correct"]) & set(rl["wrong"]) & set(soft))
+    AU, EU = [], []
+    for i in ids:
+        ph = soft[i] / max(soft[i].sum(), 1e-12)
+        lc, lw = rl["correct"][i], rl["wrong"][i]
+        lcs = lc.mean() if pool == "mean" else lc.sum()
+        lws = lw.mean() if pool == "mean" else lw.sum()
+        pm = np.array([lcs, lws]); pm = np.exp(pm - pm.max()); pm /= pm.sum()
+        AU.append(float(-(ph * np.log(np.clip(ph, 1e-12, None))).sum()))
+        EU.append(float((ph * np.log(np.clip(ph, 1e-12, None)
+                                     / np.clip(pm, 1e-12, None))).sum()))
+    AU = np.asarray(AU); EU = np.asarray(EU)
+    gate = _rho(AU, EU)
+
+    scores, _, sids = _load_peritem(model, dataset, layer, scheme,
+                                    n_clusters, tau, seeds)
+    aumap, eumap = dict(zip(ids, AU)), dict(zip(ids, EU))
+    au = np.array([aumap.get(int(i), np.nan) for i in sids])
+    eu = np.array([eumap.get(int(i), np.nan) for i in sids])
+    rows = []
+    for s, v in scores.items():
+        fam = "repr" if s in REPR else "output" if s in OUTPUT else "other"
+        rows.append(dict(model=model, dataset=dataset, signal=s, family=fam,
+                         rho_AU=_rho(v, au), rho_EU=_rho(v, eu),
+                         circular=(fam == "output")))
+    df = pd.DataFrame(rows)
+    df["gate_corr_AU_EU"] = gate; df["pool"] = pool
+
+    print(f"\n##### ce_decomp {model} / {dataset}  (pool={pool}, n={len(ids)})")
+    print(f"*** GATE corr(AU, EU) = {gate:+.3f}  "
+          f"({'ALIVE: split separates' if abs(gate) < 0.7 else 'DEAD: redundant'}) ***")
+    print(df[["signal", "family", "rho_AU", "rho_EU", "circular"]].round(3).to_string(index=False))
+    w = df[df.signal == "credal_width"].iloc[0]
+    tracks_eu = abs(w.rho_EU) > abs(w.rho_AU) + EU_MARGIN
+    print(f"credal_width: rho_AU={w.rho_AU:+.3f} rho_EU={w.rho_EU:+.3f} -> " + (
+        (f"tracks EU, sign {'+' if w.rho_EU > 0 else '-'} "
+         f"({'width predicts worse forecast' if w.rho_EU > 0 else 'INVERTED vs epistemic uncertainty'})")
+        if tracks_eu else "no EU preference over AU"))
+    df.to_parquet(f"{_dst(model, dataset)}/arr_cedecomp_{model}__{dataset}_{pool}.parquet")
+    vol.commit()
+    return dict(model=model, gate=gate, credal_rho_EU=float(w.rho_EU),
+                credal_rho_AU=float(w.rho_AU), tracks_eu=bool(tracks_eu))
 
 
 @app.function(image=image, volumes={"/vol": vol}, timeout=60 * 30)
