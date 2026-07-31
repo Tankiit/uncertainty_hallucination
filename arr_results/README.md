@@ -24,19 +24,27 @@ Results of the ARR **human-disagreement** pipeline, run 2026-07-31 over
 | # | experiment | verdict |
 |---|---|---|
 | 01 | audit_target | passed |
-| 02 | **fold (gold-oriented)** | **cleared** — the REPR-vs-OUTPUT split is not a target-folding artefact |
-| 03 | ladder | mixed — elaboration is redundant only in low-signal cells |
+| 02 | **fold (gold-oriented)** | **not detected, low power** — powered test reads no direction, but α's ceiling is ≈0, so not a clearance |
+| 03 | ladder | mixed — elaboration redundant only in low-signal cells; r(W,size)=0.85–0.96 at τ=10, so partials are legitimate |
 | 04 | **family split** | **cut from abstract** — significant but flips across models within Pavlick |
 | 05 | sign_stability | stable — credal_width's negative sign holds across τ where it carries signal |
 | 06 | neighbourhood | oracle ceiling (0.41–0.70) exceeds the built signals (~0.2–0.4); binary α ceiling ≈ 0 |
-| 07 | **components** | **rejected** — credal_width tracks balance as much as support size on Pavlick; not a pure size readout |
+| 07 | **components** | **inconclusive** — deciding Pavlick cells confounded by annotator count; only 3 clean cells < MIN_CELLS |
 
-**Through-line:** the representation-vs-output framing is real where it's clean
-(the ChaosNLI / α task contrast, certified by the fold) and honestly broken
-where it isn't (Pavlick is model-dependent). The oracle ceiling shows the
-constructed signals leave recoverable disagreement unread — most on Qwen
-(`qwen > mistral > llama` throughout) — except on binary α-NLI, where nothing
-is recoverable at all.
+**Through-line:** the representation-vs-output framing is clean on ChaosNLI vs α
+and honestly broken on Pavlick (model-dependent → cut). The α side is **not
+certified** — the fold is *not detected but under-powered* (α's oracle ceiling
+is ≈ 0, so nothing is recoverable there to begin with). The oracle ceiling shows
+the constructed signals leave recoverable disagreement unread on ChaosNLI and
+Pavlick — most on Qwen (`qwen > mistral > llama`). The "credal_width is a size
+readout" reframe is **not settled**: the decomposition that would test it is
+confounded by annotator count on the deciding cells.
+
+**Solid vs pending:** sign_stability and the oracle-ceiling gap are solid and
+paper-ready. §Elaboration (ladder) is unblocked now that r(W,size)=0.85–0.96 at
+τ=10 is confirmed. The **α narrative** (fold) and the **size-readout claim**
+(components) are both under-powered / confounded — write them as such, not as
+settled results.
 
 ## Conventions (frozen pre-registration)
 

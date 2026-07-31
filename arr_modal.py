@@ -441,46 +441,74 @@ def fold_gold(model: str, dataset: str, layer: int = -1,
     lean = np.array([lg[str(int(i))] for i in ids])
     split = np.abs(lean - 0.5)          # NULL CONTROL: monotone reparam of H
 
+    # POWER. On the branch where the crowd agrees with gold (lean>0.5), lean is
+    # a monotone function of H, so rho(X,lean) = -rho(X,H) MECHANICALLY for
+    # every X -- "gain_lean ~ 0" there is tautological, not evidence. The
+    # powered test isolates DIRECTION at matched dispersion:
+    #   dir_partial : partial rho(X, lean | H)  -- direction given dispersion
+    #   dir_binned  : within deciles of |lean-0.5| (H ~ const), rho(X, lean),
+    #                 pooled by bin size.
+    frac_mono = float((lean > 0.5).mean())
+
+    def binned_dir(x, nb=10):
+        mm = np.abs(lean - 0.5)
+        edges = np.quantile(mm, np.linspace(0, 1, nb + 1))
+        num = den = 0.0
+        for b in range(nb):
+            hi = mm <= edges[b + 1] if b == nb - 1 else mm < edges[b + 1]
+            sel = (mm >= edges[b]) & hi
+            xx, ll = x[sel], lean[sel]
+            if sel.sum() < 20 or np.std(ll) < 1e-9 or np.std(xx) < 1e-9:
+                continue
+            from scipy.stats import spearmanr
+            r = spearmanr(xx, ll)[0]
+            num += sel.sum() * (r if np.isfinite(r) else 0.0); den += sel.sum()
+        return num / den if den else np.nan
+
     rows = [dict(model=model, dataset=dataset, signal=s,
                  rho_entropy=_rho(v, ent),
                  rho_lean_gold=_rho(v, lean),
-                 rho_split_control=_rho(v, split))
+                 rho_split_control=_rho(v, split),
+                 dir_partial=_partial_rho(v, lean, ent),   # powered
+                 dir_binned=binned_dir(v))                 # powered
             for s, v in scores.items()]
     df = pd.DataFrame(rows)
     ctrl = float(np.nanmax(
         np.abs(df.rho_split_control.abs() - df.rho_entropy.abs())))
+    df["gain_lean"] = df.rho_lean_gold.abs() - df.rho_entropy.abs()  # naive/low-power
 
-    def fam_max(family, colname):
-        sub = df[df.signal.isin(family)][colname].abs()
-        return float(sub.max()) if len(sub) else float("nan")
-
-    rep_ent, rep_lean = fam_max(REPR, "rho_entropy"), fam_max(REPR, "rho_lean_gold")
-    out_ent, out_lean = fam_max(OUTPUT, "rho_entropy"), fam_max(OUTPUT, "rho_lean_gold")
-    artefact = bool(rep_lean >= out_ent - MATERIAL_RISE)
-    # how much any single signal gains from the unfolded target
-    df["gain_lean"] = df.rho_lean_gold.abs() - df.rho_entropy.abs()
+    # Verdict is on the POWERED number: does any signal read direction at
+    # matched dispersion, above MATERIAL_RISE? Base it on dir_partial (the
+    # principled matched-dispersion estimator); dir_binned (deciles, ~150
+    # items/bin) is a noisier cross-check reported alongside, not the decider.
+    max_partial = float(np.nanmax(df.dir_partial.abs()))
+    max_binned = float(np.nanmax(df.dir_binned.abs()))
+    direction_read = bool(max_partial >= MATERIAL_RISE)
 
     print(f"\n##### fold_gold {model} / {dataset}  (gold-oriented, un-folded)")
     print(df.round(4).to_string(index=False))
-    print(f"\nfrac(lean_gold<0.5) crowd-vs-gold disagreement drives the test")
-    print(f"REPR   max|rho|: entropy={rep_ent:.4f}  lean_gold={rep_lean:.4f}")
-    print(f"OUTPUT max|rho|: entropy={out_ent:.4f}  lean_gold={out_lean:.4f}")
-    print(f"max per-signal gain from unfolding = {df.gain_lean.max():+.4f}")
+    print(f"\nfrac(lean>0.5, monotone branch)={frac_mono:.3f}  -> naive gain_lean "
+          f"is tautological on that branch; read dir_partial / dir_binned instead")
     print(f"null-control max||rho_split|-|rho_entropy|| = {ctrl:.4f}  "
           f"({'OK' if ctrl < 0.02 else 'FAIL: split must reproduce H'})")
-    print(f"MATERIAL_RISE={MATERIAL_RISE} -> " + (
-        "ARTEFACT: rep-space is competitive on the unfolded target. CUT the "
-        "split from the abstract; report the fold as the finding." if artefact
-        else "fold ruled out: rep-space stays flat even with real direction. "
-        "The split survives this objection."))
+    print(f"max |dir_partial|={max_partial:.4f}  max |dir_binned|={max_binned:.4f}  "
+          f"(MATERIAL_RISE={MATERIAL_RISE})")
+    print("POWERED VERDICT -> " + (
+        "DIRECTION READ: a signal predicts which-way at matched dispersion; "
+        "the fold is NOT harmless." if direction_read else
+        "no direction detected (partial). NOTE low information: alpha's oracle "
+        "ceiling is ~0, so this is 'no signal of any kind', not a strong "
+        "directional clearance -- report as 'not detected, low power', not "
+        "'cleared'."))
 
     dst = _dst(model, dataset)
     df.to_parquet(f"{dst}/arr_foldgold_{model}__{dataset}_L{layer}_{scheme}"
                   f"_K{n_clusters}_tau{tau}_s{seeds.replace(',', '-')}.parquet")
     vol.commit()
-    return dict(model=model, dataset=dataset, rep_ent=rep_ent, rep_lean=rep_lean,
-                out_ent=out_ent, out_lean=out_lean, null_control=ctrl,
-                max_gain=float(df.gain_lean.max()), artefact=artefact)
+    return dict(model=model, dataset=dataset, null_control=ctrl,
+                frac_mono=frac_mono, max_dir_partial=max_partial,
+                max_dir_binned=max_binned, direction_read=direction_read,
+                max_gain_naive=float(df.gain_lean.max()))
 
 
 @app.function(image=image, volumes={"/vol": vol}, timeout=60 * 60 * 2)
@@ -763,27 +791,33 @@ def family(model: str, dataset: str, layer: int = -1,
     return row
 
 
-def decompose_target(counts, min_frac=MIN_FRAC):
+def decompose_target(counts, min_frac=MIN_FRAC, mode="vote", min_votes=2):
     """Split annotator entropy into support size and balance.
 
-    H = log(k) * balance, where k is the effective support (labels whose
-    annotator mass exceeds min_frac) and balance = H / log(k) is normalised
-    entropy within that support (in [0, 1]). Both are permutation-invariant,
-    so canonicalisation of the label column does not matter here.
+    H = log(k) * balance, where k is the effective support and
+    balance = H / log(k) is normalised entropy within it (in [0, 1]). Both are
+    permutation-invariant, so canonicalisation of the label column is irrelevant.
 
-    `counts` is an iterable of per-item annotator count vectors (ragged is
-    fine). Returns (log_k, balance, k, n_annot) as float arrays aligned to it.
+    mode:
+      'vote' (default) -- a label counts toward k iff its raw votes >= min_votes.
+        This is the SAME operation on every dataset. Use this: a fixed fraction
+        is NOT constant across datasets whose annotator counts differ 3.5x
+        (MIN_FRAC=2% is >=2 votes at ChaosNLI's 100 annotators but <1 vote at
+        Pavlick's median 28.5 -- i.e. no filter, so k = "labels with any vote").
+      'frac' -- a label counts iff its mass exceeds min_frac. Kept only to
+        reproduce the original (mis-specified) run; do not use for claims.
 
-    min_frac is FROZEN pre-registration (MIN_FRAC). It is a threshold on a
-    small sample: at Pavlick's median 28.5 annotators, 2% is under one vote,
-    so k there is effectively "labels with any mass" and noisier than on
-    ChaosNLI. component_panel reports k's reliability per dataset.
+    Returns (log_k, balance, k, n_annot). k==1 (unanimous) items get log_k=0,
+    balance=0; component_panel DROPS them from the correlations (they carry no
+    support/balance variation) and reports how many.
 
-    Caveat (k bias): k is itself a plug-in estimate, biased downward at small
-    annotator counts (unseen labels never enter the support). This is the same
-    Miller-Madow problem, now inside the decomposition. On Pavlick, check
-    whether the h_mm target reorders the components before trusting the numbers
-    -- audit_target already emits h_mm per cell.
+    Confound (the real hazard): k is mechanically increasing in the annotator
+    count -- more annotators, more chance of touching another label. Pavlick's
+    count VARIES per item (audit_target flag), and H is itself annotator-count-
+    biased, so BOTH log_k and balance share that nuisance. component_panel
+    therefore also reports partial rho(signal, . | n_annot). k is additionally a
+    downward-biased plug-in estimate (Miller-Madow); h_mm is the robustness
+    target audit_target emits.
     """
     import numpy as np
     log_k, balance, kk, nn = [], [], [], []
@@ -792,7 +826,7 @@ def decompose_target(counts, min_frac=MIN_FRAC):
         N = c.sum()
         p = c / max(N, 1e-12)
         H = float(-(p * np.log(np.clip(p, 1e-12, None))).sum())
-        k = int((p > min_frac).sum())
+        k = int((c >= min_votes).sum()) if mode == "vote" else int((p > min_frac).sum())
         k = max(k, 1)
         lk = float(np.log(k)) if k > 1 else 0.0
         log_k.append(lk)
@@ -802,29 +836,37 @@ def decompose_target(counts, min_frac=MIN_FRAC):
             np.asarray(kk), np.asarray(nn))
 
 
-def component_panel(scores, counts):
-    """rho(signal, log k) and rho(signal, balance) for all signals in a cell.
+def component_panel(scores, counts, mode="vote"):
+    """rho(signal, log k) and rho(signal, balance), plus the n_annot-controlled
+    partials, over the non-unanimous items. One row per signal.
 
-    Returns one row per signal. The cross-cell verdict is applied in collect.
-
-    PRE-REGISTER (checked in collect over the real-signal cells):
+    PRE-REGISTER (checked in collect over the real-signal, UN-confounded cells):
       credal_width is CONFIRMED a support-size readout if
         |rho(W, log k)| > 2 * |rho(W, balance)|  AND  rho(W, log k) < 0
-      in a majority of real-signal cells (|rho(W, H)| >= NULL_THRESHOLD and
-      log k actually varies). Rejected otherwise -- and say so plainly.
+      in a majority of those cells. A cell is excluded if |rho(W, H)| <
+      NULL_THRESHOLD (no signal), log k has no variance, OR the n_annot confound
+      is material (|rho(k, n_annot)| high with a varying count) -- on which the
+      test cannot separate support from annotator count and is reported
+      inconclusive, not decided.
     """
     import numpy as np
-    log_k, balance, k, N = decompose_target(counts)
-    # H recomputed here only to flag which cells carry real signal downstream.
+    log_k, balance, k, N = decompose_target(counts, mode=mode)
+    keep = k > 1                                   # drop unanimous items
     rows = []
     for s, v in scores.items():
+        vv = v[keep]
         rows.append(dict(signal=s,
-                         rho_logk=_rho(v, log_k),
-                         rho_balance=_rho(v, balance)))
-    meta = dict(logk_std=float(np.std(log_k)),
+                         rho_logk=_rho(vv, log_k[keep]),
+                         rho_balance=_rho(vv, balance[keep]),
+                         prho_logk_given_nA=_partial_rho(vv, log_k[keep], N[keep]),
+                         prho_balance_given_nA=_partial_rho(vv, balance[keep], N[keep])))
+    meta = dict(mode=mode,
+                logk_std=float(np.std(log_k[keep])) if keep.sum() else 0.0,
                 k_median=float(np.median(k)),
                 n_annot_median=float(np.median(N)),
-                frac_k_ge2=float(np.mean(k >= 2)))
+                n_annot_varies=bool(N.min() != N.max()),
+                frac_k1=float(np.mean(k == 1)),
+                rho_k_nA=_rho(k.astype(float), N))
     return rows, meta
 
 
@@ -853,31 +895,43 @@ def components(model: str, dataset: str, layer: int = -1,
         raise KeyError(f"{len(miss)} dump ids absent from index, e.g. {miss[:5]}")
     counts = [cmap[int(i)] for i in ids]
 
+    nA = np.array([c.sum() for c in counts])
     rows, meta = component_panel(scores, counts)
     df = pd.DataFrame(rows)
     df["model"] = model; df["dataset"] = dataset
     df["rho_H"] = [_rho(scores[s], ent) for s in df.signal]
+    df["rho_nA"] = [_rho(scores[s], nA) for s in df.signal]   # direct confound
     for kk, vv in meta.items():
         df[kk] = vv
 
-    print(f"\n##### components {model} / {dataset}  "
-          f"(k median={meta['k_median']:.0f}, log k std={meta['logk_std']:.3f}, "
-          f"n_annot median={meta['n_annot_median']:.0f}, "
-          f"frac k>=2={meta['frac_k_ge2']:.2f})")
-    print(df[["signal", "rho_logk", "rho_balance", "rho_H"]].round(4).to_string(index=False))
+    # A cell can decide the test only if it carries signal AND is not confounded
+    # by a varying annotator count driving k.
+    confounded = bool(meta["n_annot_varies"] and abs(meta["rho_k_nA"]) >= 0.3)
     w = df[df.signal == "credal_width"].iloc[0]
-    size_readout = abs(w.rho_logk) > 2 * abs(w.rho_balance) and w.rho_logk < 0
     real = abs(w.rho_H) >= NULL_THRESHOLD and meta["logk_std"] > 1e-6
+    size_readout = abs(w.rho_logk) > 2 * abs(w.rho_balance) and w.rho_logk < 0
+
+    print(f"\n##### components {model} / {dataset}  (mode={meta['mode']}, "
+          f"k median={meta['k_median']:.0f}, log k std={meta['logk_std']:.3f}, "
+          f"frac k==1 dropped={meta['frac_k1']:.2f}, "
+          f"n_annot {'VARIES' if meta['n_annot_varies'] else 'fixed'} "
+          f"median={meta['n_annot_median']:.0f}, rho(k,n_annot)={meta['rho_k_nA']:.3f})")
+    print(df[["signal", "rho_logk", "rho_balance",
+              "prho_logk_given_nA", "prho_balance_given_nA", "rho_H", "rho_nA"]]
+          .round(4).to_string(index=False))
+    status = ("CONFOUNDED (varying n_annot drives k) -> inconclusive"
+              if confounded else
+              "not real-signal -> excluded" if not real else
+              ("SIZE READOUT" if size_readout else "not size-dominated"))
     print(f"W: |rho(logk)|={abs(w.rho_logk):.3f}  2|rho(balance)|="
-          f"{2*abs(w.rho_balance):.3f}  -> "
-          f"{'SIZE READOUT' if size_readout else 'not size-dominated'}"
-          f"{'' if real else '  (cell not real-signal; excluded from verdict)'}")
+          f"{2*abs(w.rho_balance):.3f}  |partial(logk|nA)|={abs(w.prho_logk_given_nA):.3f}"
+          f"  -> {status}")
     df.to_parquet(f"{_dst(model, dataset)}/arr_components_{model}__{dataset}"
                   f"_L{layer}_{scheme}_K{n_clusters}_tau{tau}"
                   f"_s{seeds.replace(',', '-')}.parquet")
     vol.commit()
     return dict(model=model, dataset=dataset, size_readout=bool(size_readout),
-                real_signal=bool(real))
+                real_signal=bool(real), confounded=confounded)
 
 
 @app.function(image=image, volumes={"/vol": vol}, timeout=60 * 30)
@@ -912,16 +966,26 @@ def collect(alpha: float = 0.05):
     if fs:
         df = pd.concat([pd.read_parquet(f) for f in fs], ignore_index=True)
         w = df[df.signal == "credal_width"].copy()
-        w["real"] = (w.rho_H.abs() >= NULL_THRESHOLD) & (w.logk_std > 1e-6)
+        w["confounded"] = w.n_annot_varies & (w.rho_k_nA.abs() >= 0.3)
+        w["real"] = (w.rho_H.abs() >= NULL_THRESHOLD) & (w.logk_std > 1e-6) & (~w.confounded)
         w["size_readout"] = (w.rho_logk.abs() > 2 * w.rho_balance.abs()) & (w.rho_logk < 0)
-        real = w[w.real]
-        n_conf = int(real.size_readout.sum())
+        usable = w[w.real]
+        n_conf = int(usable.size_readout.sum())
+        n_confd = int((w.n_annot_varies & (w.rho_k_nA.abs() >= 0.3)).sum())
         print(f"\n===== components: credal_width decomposition =====")
-        print(w[["model", "dataset", "rho_logk", "rho_balance", "rho_H",
-                 "logk_std", "real", "size_readout"]].round(4).to_string(index=False))
-        verdict = ("CONFIRMED" if n_conf > len(real) / 2 else "REJECTED")
-        print(f"size-readout in {n_conf}/{len(real)} real-signal cells -> "
-              f"credal_width as a support-size readout: {verdict}")
+        print(w[["model", "dataset", "rho_logk", "rho_balance",
+                 "prho_logk_given_nA", "rho_H", "rho_nA", "rho_k_nA",
+                 "confounded", "real", "size_readout"]].round(4).to_string(index=False))
+        # The deciding Pavlick cells are confounded (k driven by annotator count),
+        # so the majority rule runs over too few clean cells to conclude either
+        # way -- report INCONCLUSIVE rather than a clean verdict.
+        if len(usable) < MIN_CELLS_LADDER:
+            verdict = (f"INCONCLUSIVE ({n_confd} cells confounded by n_annot, "
+                       f"only {len(usable)} usable < {MIN_CELLS_LADDER})")
+        else:
+            verdict = ("CONFIRMED size readout" if n_conf > len(usable) / 2
+                       else "REJECTED as pure size readout")
+        print(f"size-readout in {n_conf}/{len(usable)} usable cells -> {verdict}")
         df.to_parquet(f"{DERIVED}/arr_components_all.parquet")
     else:
         print("[components] nothing on the volume yet")
