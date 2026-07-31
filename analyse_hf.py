@@ -129,30 +129,44 @@ def boot_rho(s, ent, B=500, seed=0):
     return float(np.nanpercentile(out, 2.5)), float(np.nanpercentile(out, 97.5))
 
 
-def pooled_gain_ci(per_seed, ent, B=2000, seed=0):
+def pooled_gain_ci(per_seed, ent, B=2000, seed=0, signed=False):
+    """per_seed: list of (signal, baseline) per-item array pairs, one per seed.
+
+    The CALLER decides which baseline. Do not add a lookup in here --
+    keeping the choice at the call site is what makes it visible in the log.
+
+    signed=False (default) compares |rho|: the magnitude question, right for
+    a gain comparison. signed=True keeps the sign, which arr/ladder_test needs.
+
+    Returns (obs, ci_lo, ci_hi, seed_sd, n_pos, p). The sixth element is new:
+    a bootstrap-percentile two-sided p (twice the smaller tail mass about 0).
+    It is an approximation, NOT a permutation p -- if a reviewer presses on a
+    multiplicity correction resting on it, shuffle the target instead.
+    """
     import numpy as np
     from scipy.stats import spearmanr
+    f = (lambda x: x) if signed else abs
 
-    def gain(w, so, idx=None):
+    def gain(a, b, idx=None):
         if idx is None:
-            return abs(spearmanr(w, ent)[0]) - abs(spearmanr(so, ent)[0])
-        return (abs(spearmanr(w[idx], ent[idx])[0])
-                - abs(spearmanr(so[idx], ent[idx])[0]))
+            return f(spearmanr(a, ent)[0]) - f(spearmanr(b, ent)[0])
+        return (f(spearmanr(a[idx], ent[idx])[0])
+                - f(spearmanr(b[idx], ent[idx])[0]))
 
-    per_seed_obs = [gain(w, so) for w, so in per_seed]
+    per_seed_obs = [gain(a, b) for a, b in per_seed]
     obs = float(np.mean(per_seed_obs))
     rng = np.random.default_rng(seed)
     n = len(ent)
     out = np.empty(B)
-    for b in range(B):
-        i = rng.integers(0, n, n)                                         
-        out[b] = float(np.mean([gain(w, so, i) for w, so in per_seed]))
-                                                                             
-                                   
+    for b_ in range(B):
+        i = rng.integers(0, n, n)
+        out[b_] = float(np.mean([gain(a, b, i) for a, b in per_seed]))
+    frac_pos = float(np.nanmean(out > 0))
+    p = float(min(2.0 * min(frac_pos, 1.0 - frac_pos), 1.0))
     n_pos = sum(1 for g in per_seed_obs if g > 0)
     return (obs, float(np.nanpercentile(out, 2.5)),
             float(np.nanpercentile(out, 97.5)),
-            float(np.std(per_seed_obs)), n_pos)
+            float(np.std(per_seed_obs)), n_pos, p)
 
 
 def boot_rho_gain(w, so, ent, B=2000, seed=0):
@@ -267,7 +281,7 @@ def dispersion(model: str, dataset: str, scheme: str = "span_mean",
         so = sub[sub.signal == "size_only"].spearman_rho.mean()
         mm = sub.median_max_mass.mean()
         rws = sub.corr_W_vs_size_only.mean()
-        gain, glo, ghi, seed_sd, n_pos = pooled[tau]
+        gain, glo, ghi, seed_sd, n_pos, gain_p = pooled[tau]
         n_seeds = len(seed_list)
         if mm > 0.90 or rws > 0.98:
             status = "UNINFORMATIVE (W == size_only algebraically)"
@@ -285,7 +299,8 @@ def dispersion(model: str, dataset: str, scheme: str = "span_mean",
                              corr_W_vs_size_only=float(rws),
                              rho_W=float(cw), rho_size=float(so),
                              gain=float(gain), gain_lo=float(glo),
-                             gain_hi=float(ghi), between_seed_sd=float(seed_sd),
+                             gain_hi=float(ghi), gain_p=float(gain_p),
+                             between_seed_sd=float(seed_sd),
                              n_seeds_positive=int(n_pos), status=status))
         print(f"{tau:6.2f} {mm:10.4f} {rws:10.4f} {cw:+9.4f} {so:+10.4f} "
               f"{gain:+8.4f} [{glo:+.4f},{ghi:+.4f}] {seed_sd:7.4f}  {status}")
@@ -376,6 +391,27 @@ def uq_panel(model: str, dataset: str, scheme: str = "span_mean",
                     "pred_margin": np.asarray(pg),
                     "neg_mean_logprob": np.asarray(nl)})
 
+    # --- persist per-item scores (Patch 1, PATCHES_HF.md) -----------------
+    # uq_panel builds these per-item arrays and, before this, threw them away
+    # after collapsing to correlation rows. The arr/ modules need the item
+    # substrate: no dump -> no item bootstrap, partial correlation, paired
+    # family test, or neighbourhood signals. Additive: the panel numbers
+    # below are unchanged. Filename carries model/dataset/layer/scheme/K/tau/
+    # seeds and must match arr_modal._peritem_path exactly (defect 7).
+    dst = f"/vol/derived/{model}__{dataset}"; os.makedirs(dst, exist_ok=True)
+    long = pd.concat(
+        [pd.DataFrame(dict(item_id=order, signal=k, value=np.asarray(v)))
+         for k, v in metrics.items()]
+        + [pd.DataFrame(dict(item_id=order, signal="annot_entropy",
+                             value=np.asarray(ent)))],
+        ignore_index=True)
+    long["model"] = model; long["dataset"] = dataset
+    long["layer"] = layer; long["tau"] = tau
+    long["K"] = n_clusters; long["seeds"] = seeds; long["scheme"] = scheme
+    fn = (f"{dst}/peritem_{model}__{dataset}_L{layer}_{scheme}"
+          f"_K{n_clusters}_tau{tau}_s{seeds.replace(',', '-')}.parquet")
+    long.to_parquet(fn); vol.commit()
+
     GROUP = {"credal_width": "mass", "mass_entropy": "mass",
              "one_minus_max": "mass", "size_only": "density",
              "knn_dist": "density", "pred_entropy": "token",
@@ -409,11 +445,13 @@ def uq_panel(model: str, dataset: str, scheme: str = "span_mean",
         if name == "credal_width":
             continue
         ok = okw & np.isfinite(v)
-        g, lo, hi, _, _ = pooled_gain_ci([(w[ok], v[ok])], ent[ok], B=1000)
+        g, lo, hi, _, _, gp = pooled_gain_ci([(w[ok], v[ok])], ent[ok], B=1000)
         verdict = ("W better" if lo > 0 else
                    "W worse" if hi < 0 else "tie")
-        comp.append(dict(baseline=name, gain=g, lo=lo, hi=hi, verdict=verdict))
-        print(f"  vs {name:18s} gain={g:+.4f} [{lo:+.4f},{hi:+.4f}]  {verdict}")
+        comp.append(dict(baseline=name, gain=g, lo=lo, hi=hi, p=gp,
+                         verdict=verdict))
+        print(f"  vs {name:18s} gain={g:+.4f} [{lo:+.4f},{hi:+.4f}] "
+              f"p={gp:.3f}  {verdict}")
 
     dst = f"/vol/derived/{model}__{dataset}"; os.makedirs(dst, exist_ok=True)
     df.to_parquet(f"{dst}/A1b_uq_panel_L{layer}_tau{tau}.parquet"); vol.commit()
@@ -602,8 +640,9 @@ def ensemble_disagreement(dataset: str, models: str = "llama3_8b,mistral_7b,qwen
     W = _signals(soft_mass(H, km.cluster_centers_, tau), sizes)["credal_width"]
     for name, v in [("ensemble_pref_std", pref_std),
                     ("ensemble_vote_entropy", vote_entropy)]:
-        g, lo, hi, _, _ = pooled_gain_ci([(W, v)], ent, B=1000)
+        g, lo, hi, _, _, gp = pooled_gain_ci([(W, v)], ent, B=1000)
         print(f"  credal_width vs {name:22s} gain={g:+.4f} [{lo:+.4f},{hi:+.4f}] "
+              f"p={gp:.3f} "
               f"{'W better' if lo > 0 else 'W worse' if hi < 0 else 'tie'}")
     return out
 
