@@ -39,11 +39,15 @@ import numpy as np
 
 # --- PRE-REGISTRATION. Frozen 2026-07-31 (reviewer left the margin blank). ---
 DENSITY_NULL = 0.05  # mechanism test rho(W, EU | knn_dist), frozen BEFORE the
-                     #   number existed: |partial| < DENSITY_NULL -> density
-                     #   explains the double inversion (typicality reading),
-                     #   the paper gains a mechanism. partial <= -DENSITY_NULL
-                     #   -> W carries an inversion BEYOND density (stronger
-                     #   Claim C: a non-redundant part, wrongly signed).
+                     #   number existed. THE RULE FIRED AND WAS THE WRONG SHAPE:
+                     #   an absolute bound on a residual passes any small-effect
+                     #   cell regardless of mechanism (the alpha-inflation trap,
+                     #   cf. the ladder). Report PROPORTIONAL mediation instead
+                     #   (residual/total ~ const, and the product decomposition
+                     #   rho(W,EU) ~ rho(W,knn)*rho(knn,EU)). And control LENGTH:
+                     #   on chaosnli rho(W,n_ans_tok)=+0.85, so W/knn/length are
+                     #   collinear and no residual survives controlling both.
+                     #   Kept as the pre-registered artefact, not a live gate.
 EU_MARGIN = 0.05   # W "tracks EU" if |rho(W,EU)| > |rho(W,AU)| + EU_MARGIN.
                    #   Sign is a finding: rho(W,EU) > 0 -> width predicts a
                    #   worse forecast (the construction works, wrong target).

@@ -268,49 +268,79 @@ re-extraction above); no llama on chaosnli (gated tokens); magnitudes model-
 dependent. But the *sign* is consistent everywhere it is clean. Data:
 `data/ce_decomp.csv`; pre-registration + caveats in `../arr/decompose_target.py`.
 
-### 08b · Mechanism — density explains the double inversion (mostly)
+### 08b · Mechanism — the double inversion is density AND length, no residual
 
-Pre-registered before the number (`DENSITY_NULL = 0.05`): `|ρ(W, EU | knn_dist)|
-< 0.05` → density (typicality) explains the inversion; `≤ −0.05` → W carries an
-inversion *beyond* density. Data: `data/mechanism.csv`.
+The double inversion is real. What mediates it, measured as **proportional
+mediation** (not a threshold — `DENSITY_NULL=0.05` was the wrong shape: an
+absolute bound on a residual passes any small-effect cell regardless of
+mechanism, the §03 α-inflation trap again). Data: `data/mechanism.csv`.
 
-| cell | corr(AU,EU) | ρ(W,EU) | **ρ(W,EU\|knn)** | ρ(W,EU\|AU) | ρ(W,knn) |
-|---|--:|--:|--:|--:|--:|
-| llama·α | −0.33 | −0.110 | **−0.030** ✓ | −0.126 | −0.76 |
-| mistral·α | −0.23 | −0.075 | **−0.012** ✓ | −0.072 | −0.41 |
-| qwen·α | −0.18 | −0.063 | **+0.027** ✓ | −0.063 | −0.56 |
-| qwen·chaosnli | +0.21 | −0.117 | **−0.045** ✓ | −0.073 | −0.91 |
-| mistral·chaosnli | +0.12 | −0.545 | **−0.173** ✗ | −0.537 | −0.94 |
+**Product decomposition** (positive evidence, not a null): `ρ(W,EU) ≈ ρ(W,knn) ×
+ρ(knn,EU)` — the density path recovers ~85–91% of the total:
 
-(✓ = collapses below `DENSITY_NULL`.)
+| cell | ρ(W,EU) | ρ(W,knn)×ρ(knn,EU) | residual\|knn (95% CI) |
+|---|--:|--:|--:|
+| llama·α | −0.110 | −0.091 | −0.030 [−0.079, +0.020] |
+| mistral·α | −0.075 | −0.064 | −0.012 [−0.064, +0.038] |
+| qwen·α | −0.063 | −0.086 | +0.027 [−0.023, +0.078] |
+| qwen·chaosnli | −0.117 | −0.098 | −0.045 [−0.080, −0.012] |
+| mistral·chaosnli | −0.545 | −0.495 | −0.173 [−0.210, −0.134] |
 
-- **Q1 `corr(AU, EU)` ∈ [−0.33, +0.21]**, and the sign differs by dataset — so
-  "inverted against both" is genuinely *two* facts, not one reported twice.
-- **Q2 mechanism: density (typicality) largely explains it.** Controlling for
-  `knn_dist`, W's EU relationship collapses below `DENSITY_NULL` on **4 of 5
-  cells**. The mechanism is concrete: `ρ(W, knn_dist) ≈ −0.76 to −0.94` (W is
-  essentially *inverted density*), and `knn_dist` is a proper **positive** EU
-  proxy (`ρ(knn, EU) = +0.11 … +0.53`). So W is EU-inverted *because* it is
-  density-inverted. The one exception is **mistral·chaosnli** (residual −0.173):
-  there W carries an inversion beyond density — a non-redundant, wrongly-signed
-  component (the stronger Claim-C reading), consistent with the ladder's
-  legitimate −0.24 partial.
-- **Q3 survives AU:** `ρ(W, EU | AU)` stays negative everywhere (−0.06 … −0.54),
-  so the epistemic inversion is separate from the aleatoric relationship.
+The residual scales with the total at a roughly constant fraction (~30%), across
+an **8× range of effect sizes** — one consistent proportion, not "4 pass / 1
+fail." `ρ(W, knn_dist) = −0.76 … −0.94` (W is essentially *inverted density*);
+`knn_dist` is a proper **positive** EU proxy. So W is EU-inverted *because* it is
+density-inverted.
 
-**Two-by-two (with one caveat).** `pred_entropy` is positive on *both* targets on
-4 of 5 cells (clean output-vs-representation contrast), but **−0.101 on AU for
-qwen·chaosnli** breaks it, and its EU column is **circular** (shares `p_model`
-with EU) so cannot be claimed cleanly. The honest table is: representation (W)
-inverted on EU (survives controls); output (pred_entropy) positive on AU on most
-cells; the output-EU cell is not usable as evidence. Not an airtight 2×2.
+**But length is a co-driver, and on chaosnli it is huge (blocker 1, resolved).**
+The AAAI answer-length confound lands: on chaosnli `ρ(W, n_ans_tok) = +0.85`,
+`ρ(knn, n_ans_tok) = −0.84` — W, density and answer length are nearly
+collinear (W's `span_mean` pools over the answer span; longer answer → more
+positions). Consequences:
 
-**This upgrades the paper.** It is no longer exclusion-only: the τ-invariance
-(§05) excludes miscalibration, 08 excludes wrong-target, and 08b *identifies*
-density/typicality as the mechanism — W is high where the item is typical, which
-is where the model already forecasts well and annotators agree, i.e. a
-difficulty readout with the sign reversed. `h_mm` leaves EU unchanged, so this
-is not an annotator-count artefact.
+| cell | ρ(W,EU) | \|knn | \|n_ans_tok | \|**knn AND length** |
+|---|--:|--:|--:|--:|
+| qwen·chaosnli | −0.117 | −0.045 | **+0.099** (flips!) | **+0.031** |
+| mistral·chaosnli | −0.545 | −0.173 | −0.187 | **+0.018** |
+| α (avg) | −0.083 | ~−0.005 | ~−0.036 | ~−0.000 |
+
+Controlling **both** density and length leaves **≈0 residual everywhere**. On
+qwen·chaosnli the sign even *flips* under length alone. So the −0.173
+"beyond-density" residual on mistral is **length, not a non-redundant component**
+— the stronger Claim-C reading does *not* survive. The honest statement: W's
+inversion against forecast error is jointly explained by local density and
+answer length, which its own construction (`span_mean` over the answer) makes
+nearly collinear with it; nothing remains after both.
+
+**Fragility (both real).** The conditional estimates are differences of
+near-equal quantities (`ρ(W,knn)=−0.94`), so a 0.02 shift in `ρ(W,knn)` moves the
+partial ~0.04 — hence the bootstrap CIs above, not point estimates. And
+controlling a variable correlated at −0.76…−0.94 leaves 6–42% residual variance,
+so the test has least power exactly where a residual would matter: "no residual"
+is weaker than it sounds.
+
+**Distractor selection (blocker 2, resolved).** On chaosnli the arms are
+deterministic: `correct` = the **top-voted** human label (rank 0, 100% of
+items), `wrong` = the **second**-voted (rank 1, 100%), never the least. So the
+binary-pair is always the top-2 labels and the rule is constant (no
+item-dependent selection confound), but restricted AU is the entropy of the
+*confusable pair* — a Setup sentence, whatever else.
+
+**Q1 `corr(AU,EU)` ∈ [−0.33, +0.21]**, sign differs by dataset → "inverted
+against both" is two facts, not one. **Q3 `ρ(W,EU|AU)`** stays negative
+everywhere → the epistemic inversion is separate from the aleatoric one.
+
+**Two-by-two — do not claim it cleanly.** `pred_entropy` is positive on both
+targets on 4/5 cells but **−0.101 on AU for qwen·chaosnli**, and its EU column is
+**circular** (shares `p_model` with EU). Representation (W) inverted on EU;
+output positive on AU on most cells; the output-EU cell is not evidence. Not an
+airtight 2×2 — if the contrast is kept, the circularity belongs in the main text.
+
+**Net.** The paper is still not exclusion-only, but the mechanism is *density +
+length*, not density alone, and there is **no residual beyond them** — so W is a
+typicality/length readout inverted against forecast error, and the frame+mass
+machinery adds nothing beyond distance and length (consistent with §03). `h_mm`
+leaves EU unchanged, so it is not an annotator-count artefact.
 
 ---
 
