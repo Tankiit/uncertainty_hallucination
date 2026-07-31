@@ -17,7 +17,7 @@ Results of the ARR **human-disagreement** pipeline, run 2026-07-31 over
 | `data/family_bh.csv` | Paired REPR-vs-OUTPUT family test, BH-corrected (9 rows). |
 | `data/sign_stability.csv` | ρ(signal, H) across τ∈{5,10,25} for the ladder signals (81 rows). |
 | `data/components.csv` | Target decomposed into log k (support) and balance; ρ of every signal with each (81 rows). |
-| `data/ce_decomp_alpha.csv` | AU/EU (aleatoric/epistemic) split on α: ρ(signal, AU) vs ρ(signal, EU), by family (27 rows). |
+| `data/ce_decomp.csv` | AU/EU (aleatoric/epistemic) split on α + chaosnli: ρ(signal, AU) vs ρ(signal, EU) + h_mm, by family. |
 | `data/neighbourhood.csv` | Neighbourhood reads + cross-fitted oracle ceiling (ρ and R²) per cell × k. |
 
 ## Headline
@@ -31,7 +31,7 @@ Results of the ARR **human-disagreement** pipeline, run 2026-07-31 over
 | 05 | sign_stability | stable — credal_width's negative sign holds across τ where it carries signal |
 | 06 | neighbourhood | oracle ceiling (0.41–0.70) exceeds the built signals (~0.2–0.4); binary α ceiling ≈ 0 |
 | 07 | **components** | **inconclusive** — deciding Pavlick cells confounded by annotator count; only 3 clean cells < MIN_CELLS |
-| 08 | **AU/EU decomposition** | gate alive on α; among clean signals, knn_dist tracks epistemic (right sign), credal_width inverted — preliminary, α only |
+| 08 | **AU/EU decomposition** | gate alive (α+chaosnli); raw density (knn_dist) tracks epistemic **right sign**, credal_width **inverted** (up to −0.55) — clean-signal finding |
 
 **Through-line:** the representation-vs-output framing is clean on ChaosNLI vs α
 and honestly broken on Pavlick (model-dependent → cut). The α side is **not

@@ -942,6 +942,19 @@ def components(model: str, dataset: str, layer: int = -1,
                 real_signal=bool(real), confounded=confounded)
 
 
+# Label first-token -> soft_labels index, from decoding ans_ids with the model
+# tokenizer (scratchpad/decode_labels.py). Lets ce_decomp do the binary-PAIR
+# reduction on chaosnli: correct + the one extracted distractor. Llama's ids are
+# gated (no tokenizer) -> chaosnli runs on qwen/mistral only. Pavlick is omitted
+# deliberately: its answers were a 2-way entail/contradict framing while the
+# human labels are 5-way ordinal, so the supports do not match (needs a 5-way
+# re-extraction + an ordinal metric; see arr/decompose_target.py).
+LABEL_FIRST_TOKEN = {
+    ("qwen2_5_7b", "chaosnli"):  {306: 0, 59568: 1, 8222: 2},   # ent/neutral/contr
+    ("mistral_7b", "chaosnli"):  {1704: 0, 14982: 1, 16003: 2},
+}
+
+
 @app.function(image=ce_image, volumes={"/vol": vol}, timeout=60 * 60)
 def ce_decomp(model: str, dataset: str = "chaosnli_alpha",
               layer: int = -1, scheme: str = "span_mean", n_clusters: int = 200,
@@ -951,72 +964,108 @@ def ce_decomp(model: str, dataset: str = "chaosnli_alpha",
     CE(p_human, p_model) = H(p_human) + KL(p_human || p_model)
         AU = H(p_human)   (the panel's only target)   EU = KL   (never examined)
 
-    Only the two-arm binary cell (chaosnli_alpha) is clean from what's on the
-    volume: correct+wrong ARE the label set. chaosnli/pavlick need a
-    label->token map that was not extracted -- see arr/decompose_target.py.
+    Two computable regimes from what's on the volume (a two-arm correct/wrong
+    contrast, NOT a per-label scan):
+      * chaosnli_alpha: binary -> correct+wrong ARE the label set. Clean.
+      * chaosnli: binary-PAIR reduction -- correct + the one extracted distractor
+        (identified via LABEL_FIRST_TOKEN). p_human restricted to those 2 labels.
+        Lossy (drops the third label per item) but a valid forecast sub-question,
+        and it reaches the cells where the signals actually correlate with AU.
+    pavlick is not runnable (support mismatch); a full multi-class p_model needs
+    a GPU re-extraction (the pos0 top-k is dominated by CoT-preamble tokens, not
+    labels, so it cannot substitute).
 
-    GATE: corr(AU, EU) is printed first. If |corr| is high the split separates
-    nothing. Output-family EU correlations are partly CIRCULAR (those signals
-    and EU are both functions of p_model); the representation family is clean.
+    h_mm (reviewer's plug-in-bias fix): AU is also reported Miller-Madow
+    corrected; EU_mm = EU_plugin - (AU_mm - AU_plugin) moves the absorbed bias
+    out of EU. rho(., EU_plugin) vs rho(., EU_mm) shows whether EU was partly an
+    annotator-count readout. GATE corr(AU,EU) is printed first.
     """
-    if dataset not in BINARY_DATASETS:
-        raise ValueError(f"{dataset} is not binary; p_model over the full label "
-                         f"set is not on the volume (see arr/decompose_target.py)")
     import numpy as np, pandas as pd, glob as _glob
     from safetensors import safe_open
+    binary = dataset in BINARY_DATASETS
+    tokmap = LABEL_FIRST_TOKEN.get((model, dataset))
+    if not binary and tokmap is None:
+        raise ValueError(f"{model}/{dataset}: no label map and not binary; "
+                         f"p_model over the label set is not recoverable here "
+                         f"(see arr/decompose_target.py).")
     root = _root(model, dataset)
     idx = pd.read_parquet(f"{root}/index.parquet")
     soft = {int(i): np.asarray(json.loads(s) if isinstance(s, str) else s, float)
             for i, s in zip(idx.item_id, idx.soft_labels)}
-    rl = {"correct": {}, "wrong": {}}
+    rl = {"correct": {}, "wrong": {}}; a0 = {"correct": {}, "wrong": {}}
     for p in sorted(_glob.glob(f"{root}/logits/shard-*.safetensors")):
         with safe_open(p, framework="np") as f:
             for k in f.keys():
-                i, a, fld = k.split(".")
+                i, arm, fld = k.split(".")
                 if fld == "realised_logprob":
-                    rl[a][int(i)] = np.asarray(f.get_slice(k)[:], float)
+                    rl[arm][int(i)] = np.asarray(f.get_slice(k)[:], float)
+                elif fld == "ans_ids":
+                    a0[arm][int(i)] = int(np.asarray(f.get_slice(k)[:])[0])
     ids = sorted(set(rl["correct"]) & set(rl["wrong"]) & set(soft))
-    AU, EU = [], []
+
+    AU, AUmm, EU, EUmm, Npair = [], [], [], [], []
+    kept = []
     for i in ids:
-        ph = soft[i] / max(soft[i].sum(), 1e-12)
+        if binary:
+            vc, vw = float(soft[i][0]), float(soft[i][1])   # correct=idx0 (majority)
+        else:
+            ci = tokmap.get(a0["correct"].get(i)); wi = tokmap.get(a0["wrong"].get(i))
+            if ci is None or wi is None or ci == wi:
+                continue
+            vc, vw = float(soft[i][ci]), float(soft[i][wi])
+        N = vc + vw
+        if N < 1:
+            continue
+        ph = np.array([vc, vw]) / N
         lc, lw = rl["correct"][i], rl["wrong"][i]
         lcs = lc.mean() if pool == "mean" else lc.sum()
         lws = lw.mean() if pool == "mean" else lw.sum()
         pm = np.array([lcs, lws]); pm = np.exp(pm - pm.max()); pm /= pm.sum()
-        AU.append(float(-(ph * np.log(np.clip(ph, 1e-12, None))).sum()))
-        EU.append(float((ph * np.log(np.clip(ph, 1e-12, None)
-                                     / np.clip(pm, 1e-12, None))).sum()))
-    AU = np.asarray(AU); EU = np.asarray(EU)
+        au = float(-(ph * np.log(np.clip(ph, 1e-12, None))).sum())
+        kobs = int((ph > 0).sum())
+        mm = (kobs - 1) / (2.0 * N)                       # Miller-Madow bias
+        eu = float((ph * np.log(np.clip(ph, 1e-12, None) / np.clip(pm, 1e-12, None))).sum())
+        AU.append(au); AUmm.append(au + mm); EU.append(eu); EUmm.append(eu - mm)
+        Npair.append(N); kept.append(i)
+    AU, EU, EUmm = map(np.asarray, (AU, EU, EUmm))
+    Npair = np.asarray(Npair)
     gate = _rho(AU, EU)
+    eu_nA = _rho(EU, Npair)                                # is EU an n_annot readout?
 
     scores, _, sids = _load_peritem(model, dataset, layer, scheme,
                                     n_clusters, tau, seeds)
-    aumap, eumap = dict(zip(ids, AU)), dict(zip(ids, EU))
-    au = np.array([aumap.get(int(i), np.nan) for i in sids])
-    eu = np.array([eumap.get(int(i), np.nan) for i in sids])
+    def al(vals):
+        mp = dict(zip(kept, vals))
+        return np.array([mp.get(int(i), np.nan) for i in sids])
+    au_a, eu_a, eumm_a = al(AU), al(EU), al(EUmm)
     rows = []
     for s, v in scores.items():
         fam = "repr" if s in REPR else "output" if s in OUTPUT else "other"
         rows.append(dict(model=model, dataset=dataset, signal=s, family=fam,
-                         rho_AU=_rho(v, au), rho_EU=_rho(v, eu),
-                         circular=(fam == "output")))
+                         rho_AU=_rho(v, au_a), rho_EU=_rho(v, eu_a),
+                         rho_EU_mm=_rho(v, eumm_a), circular=(fam == "output")))
     df = pd.DataFrame(rows)
-    df["gate_corr_AU_EU"] = gate; df["pool"] = pool
+    df["gate_corr_AU_EU"] = gate; df["rho_EU_nAnnot"] = eu_nA; df["pool"] = pool
 
-    print(f"\n##### ce_decomp {model} / {dataset}  (pool={pool}, n={len(ids)})")
-    print(f"*** GATE corr(AU, EU) = {gate:+.3f}  "
-          f"({'ALIVE: split separates' if abs(gate) < 0.7 else 'DEAD: redundant'}) ***")
-    print(df[["signal", "family", "rho_AU", "rho_EU", "circular"]].round(3).to_string(index=False))
+    regime = "binary" if binary else "binary-pair (correct + distractor)"
+    print(f"\n##### ce_decomp {model} / {dataset}  ({regime}, pool={pool}, n={len(kept)})")
+    print(f"*** GATE corr(AU, EU) = {gate:+.3f} "
+          f"({'ALIVE' if abs(gate) < 0.7 else 'DEAD: redundant'})   "
+          f"corr(EU, n_annot_pair) = {eu_nA:+.3f} ***")
+    print(df[["signal", "family", "rho_AU", "rho_EU", "rho_EU_mm", "circular"]]
+          .round(3).to_string(index=False))
     w = df[df.signal == "credal_width"].iloc[0]
-    tracks_eu = abs(w.rho_EU) > abs(w.rho_AU) + EU_MARGIN
-    print(f"credal_width: rho_AU={w.rho_AU:+.3f} rho_EU={w.rho_EU:+.3f} -> " + (
-        (f"tracks EU, sign {'+' if w.rho_EU > 0 else '-'} "
-         f"({'width predicts worse forecast' if w.rho_EU > 0 else 'INVERTED vs epistemic uncertainty'})")
-        if tracks_eu else "no EU preference over AU"))
+    tracks = abs(w.rho_EU) > abs(w.rho_AU) + EU_MARGIN
+    print(f"credal_width: rho_AU={w.rho_AU:+.3f} rho_EU={w.rho_EU:+.3f} "
+          f"rho_EU_mm={w.rho_EU_mm:+.3f} -> " + (
+          (f"tracks EU, sign {'+' if w.rho_EU > 0 else '-'} "
+           f"({'predicts worse forecast' if w.rho_EU > 0 else 'INVERTED vs epistemic'})")
+          if tracks else "no EU preference over AU"))
     df.to_parquet(f"{_dst(model, dataset)}/arr_cedecomp_{model}__{dataset}_{pool}.parquet")
     vol.commit()
-    return dict(model=model, gate=gate, credal_rho_EU=float(w.rho_EU),
-                credal_rho_AU=float(w.rho_AU), tracks_eu=bool(tracks_eu))
+    return dict(model=model, dataset=dataset, gate=gate, eu_nAnnot=eu_nA,
+                credal_rho_AU=float(w.rho_AU), credal_rho_EU=float(w.rho_EU),
+                credal_rho_EU_mm=float(w.rho_EU_mm), tracks_eu=bool(tracks))
 
 
 @app.function(image=image, volumes={"/vol": vol}, timeout=60 * 30)
