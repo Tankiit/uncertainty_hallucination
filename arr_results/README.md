@@ -18,6 +18,7 @@ Results of the ARR **human-disagreement** pipeline, run 2026-07-31 over
 | `data/sign_stability.csv` | ρ(signal, H) across τ∈{5,10,25} for the ladder signals (81 rows). |
 | `data/components.csv` | Target decomposed into log k (support) and balance; ρ of every signal with each (81 rows). |
 | `data/ce_decomp.csv` | AU/EU (aleatoric/epistemic) split on α + chaosnli: ρ(signal, AU) vs ρ(signal, EU) + h_mm, by family. |
+| `data/mechanism.csv` | Mechanism test: ρ(W,EU\|knn_dist) and the AU/EU partials — density explains the double inversion (4/5 cells). |
 | `data/neighbourhood.csv` | Neighbourhood reads + cross-fitted oracle ceiling (ρ and R²) per cell × k. |
 
 ## Headline

@@ -1,0 +1,6 @@
+cell,corr_AU_EU,rho_W_EU,rho_W_EU_given_knn,rho_W_EU_given_AU,rho_W_AU_given_knn,rho_pe_AU,rho_pe_EU,rho_W_knn,rho_knn_EU
+llama3_8b/chaosnli_alpha,-0.328,-0.110,-0.030,-0.126,0.021,0.090,0.214,-0.761,0.120
+mistral_7b/chaosnli_alpha,-0.234,-0.075,-0.012,-0.072,0.049,0.132,0.167,-0.414,0.155
+qwen2_5_7b/chaosnli_alpha,-0.178,-0.063,0.027,-0.063,0.023,0.111,0.159,-0.557,0.154
+qwen2_5_7b/chaosnli,0.211,-0.117,-0.045,-0.073,-0.155,-0.101,0.107,-0.909,0.108
+mistral_7b/chaosnli,0.123,-0.545,-0.173,-0.537,-0.021,0.056,0.476,-0.940,0.527

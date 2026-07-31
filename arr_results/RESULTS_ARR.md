@@ -268,6 +268,50 @@ re-extraction above); no llama on chaosnli (gated tokens); magnitudes model-
 dependent. But the *sign* is consistent everywhere it is clean. Data:
 `data/ce_decomp.csv`; pre-registration + caveats in `../arr/decompose_target.py`.
 
+### 08b · Mechanism — density explains the double inversion (mostly)
+
+Pre-registered before the number (`DENSITY_NULL = 0.05`): `|ρ(W, EU | knn_dist)|
+< 0.05` → density (typicality) explains the inversion; `≤ −0.05` → W carries an
+inversion *beyond* density. Data: `data/mechanism.csv`.
+
+| cell | corr(AU,EU) | ρ(W,EU) | **ρ(W,EU\|knn)** | ρ(W,EU\|AU) | ρ(W,knn) |
+|---|--:|--:|--:|--:|--:|
+| llama·α | −0.33 | −0.110 | **−0.030** ✓ | −0.126 | −0.76 |
+| mistral·α | −0.23 | −0.075 | **−0.012** ✓ | −0.072 | −0.41 |
+| qwen·α | −0.18 | −0.063 | **+0.027** ✓ | −0.063 | −0.56 |
+| qwen·chaosnli | +0.21 | −0.117 | **−0.045** ✓ | −0.073 | −0.91 |
+| mistral·chaosnli | +0.12 | −0.545 | **−0.173** ✗ | −0.537 | −0.94 |
+
+(✓ = collapses below `DENSITY_NULL`.)
+
+- **Q1 `corr(AU, EU)` ∈ [−0.33, +0.21]**, and the sign differs by dataset — so
+  "inverted against both" is genuinely *two* facts, not one reported twice.
+- **Q2 mechanism: density (typicality) largely explains it.** Controlling for
+  `knn_dist`, W's EU relationship collapses below `DENSITY_NULL` on **4 of 5
+  cells**. The mechanism is concrete: `ρ(W, knn_dist) ≈ −0.76 to −0.94` (W is
+  essentially *inverted density*), and `knn_dist` is a proper **positive** EU
+  proxy (`ρ(knn, EU) = +0.11 … +0.53`). So W is EU-inverted *because* it is
+  density-inverted. The one exception is **mistral·chaosnli** (residual −0.173):
+  there W carries an inversion beyond density — a non-redundant, wrongly-signed
+  component (the stronger Claim-C reading), consistent with the ladder's
+  legitimate −0.24 partial.
+- **Q3 survives AU:** `ρ(W, EU | AU)` stays negative everywhere (−0.06 … −0.54),
+  so the epistemic inversion is separate from the aleatoric relationship.
+
+**Two-by-two (with one caveat).** `pred_entropy` is positive on *both* targets on
+4 of 5 cells (clean output-vs-representation contrast), but **−0.101 on AU for
+qwen·chaosnli** breaks it, and its EU column is **circular** (shares `p_model`
+with EU) so cannot be claimed cleanly. The honest table is: representation (W)
+inverted on EU (survives controls); output (pred_entropy) positive on AU on most
+cells; the output-EU cell is not usable as evidence. Not an airtight 2×2.
+
+**This upgrades the paper.** It is no longer exclusion-only: the τ-invariance
+(§05) excludes miscalibration, 08 excludes wrong-target, and 08b *identifies*
+density/typicality as the mechanism — W is high where the item is typical, which
+is where the model already forecasts well and annotators agree, i.e. a
+difficulty readout with the sign reversed. `h_mm` leaves EU unchanged, so this
+is not an annotator-count artefact.
+
 ---
 
 ## 01 · audit_target
