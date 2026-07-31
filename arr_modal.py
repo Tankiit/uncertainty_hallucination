@@ -33,6 +33,11 @@ vol = modal.Volume.from_name("rsuq-latent", create_if_missing=True)
 image = (modal.Image.debian_slim(python_version="3.11")
          .pip_install("numpy", "pandas", "pyarrow", "scikit-learn", "scipy"))
 
+# neighbourhood needs the raw pooled states, so it adds safetensors and reuses
+# analyse_hf's loaders (load_states/_meta/_index) rather than a second copy of
+# the pooling + keep-intersection logic that would eventually drift from it.
+nbhd_image = image.pip_install("safetensors").add_local_python_source("analyse_hf")
+
 CELLS = "/vol/hf/cells"
 DERIVED = "/vol/derived"
 
@@ -555,10 +560,11 @@ def sign_stability(model: str, dataset: str, layer: int = -1,
     return rows
 
 
-@app.function(image=image, volumes={"/vol": vol}, timeout=60 * 60 * 3)
+@app.function(image=nbhd_image, volumes={"/vol": vol}, timeout=60 * 60 * 3)
 def neighbourhood(model: str, dataset: str, layer: int = -1,
                   scheme: str = "span_mean", arm: str = "correct",
-                  k_grid: str = "10,25,50", n_folds: int = 5, seed: int = 0):
+                  k_grid: str = "10,25,50", n_folds: int = 5, seed: int = 0,
+                  n_clusters: int = 200, tau: float = 10.0, seeds: str = "0,1,2"):
     """Alternative readings of the same neighbourhood, plus the ceiling.
 
     Cardinality is one summary among several, so the ladder result invites
@@ -578,52 +584,92 @@ def neighbourhood(model: str, dataset: str, layer: int = -1,
     NearestNeighbors, self excluded) so knn_dist and these read the same
     neighbourhoods. Do not switch metric or backend. k is NOT tuned against
     the target -- the grid is a robustness band.
+
+    Gold labels for nbhd_heterogeneity are the majority argmax of the
+    annotator distribution. Where that is degenerate (the binary cell is
+    canonicalised correct-first, so argmax is constant) or the column is
+    absent, heterogeneity is reported N/A rather than silently filled.
+    Target and item order come from the per-item dump; H is loaded via
+    analyse_hf.load_states and aligned to the dump by item_id.
     """
     import numpy as np, pandas as pd
     from sklearn.neighbors import NearestNeighbors
+    from scipy.stats import spearmanr
+    import analyse_hf as A
 
-    # TODO: load pooled states H and gold labels for this cell. The pooling
-    #       must match uq_panel's (_pool with `scheme`, layer, arm) and the
-    #       item order must match the per-item dump. Reuse analyse_hf's
-    #       loaders rather than writing a second copy.
-    H, gold, target, ids = None, None, None, None
-    raise NotImplementedError(
-        "Load H (n,d), gold (n,), target (n,) aligned to the per-item dump. "
-        "Open question: does index.parquet carry a gold label column for all "
-        "three datasets? If Pavlick has no single gold label, "
-        "nbhd_heterogeneity is undefined there and that cell must be "
-        "reported as N/A rather than silently filled.")
+    root = _root(model, dataset)
+    meta = A._meta(root)
+    lyr = meta["n_total_layers"] + 1 + layer if layer < 0 else layer
+
+    # target (annotator entropy) and canonical item order from the dump
+    scores, target, ids = _load_peritem(model, dataset, lyr, scheme,
+                                        n_clusters, tau, seeds)
+    ids = np.asarray([int(i) for i in ids])
+
+    # pooled states, aligned to the dump ids (never assume row order matches)
+    ids_h, H = A.load_states(root, meta, lyr, arm, scheme)
+    pos = {int(i): r for r, i in enumerate(ids_h)}
+    miss = [int(i) for i in ids if int(i) not in pos]
+    if miss:
+        raise KeyError(f"{len(miss)} dump ids absent from states, e.g. {miss[:5]}")
+    H = H[[pos[int(i)] for i in ids]]
+    n = len(ids)
+
+    # gold = majority argmax of the annotator distribution, if well defined
+    idx = A._index(root)
+    col = ("soft_labels" if "soft_labels" in idx.columns
+           else "annotator_labels" if "annotator_labels" in idx.columns else None)
+    gold = None
+    if col is not None:
+        gmap = {}
+        for iid, raw in zip(idx.item_id, idx[col]):
+            v = json.loads(raw) if isinstance(raw, str) else raw
+            p = np.asarray(v, float).ravel()
+            gmap[int(iid)] = int(np.argmax(p)) if p.size else -1
+        g = np.array([gmap.get(int(i), -1) for i in ids])
+        if np.all(g >= 0) and len(np.unique(g)) >= 2:
+            gold = g
+    if gold is None:
+        why = "column absent" if col is None else "argmax degenerate (canonicalised)"
+        print(f"[{dataset}] nbhd_heterogeneity = N/A  ({why})")
 
     def nbrs(k):
-        nn = NearestNeighbors(n_neighbors=min(k + 1, len(H)),
+        nn = NearestNeighbors(n_neighbors=min(k + 1, n),
                               algorithm="brute").fit(H)
         d, i = nn.kneighbors(H)
         return i[:, 1:], d[:, 1:]
 
-    rows = []
+    def sp(v):
+        ok = np.isfinite(v) & np.isfinite(target)
+        return float(spearmanr(v[ok], target[ok])[0]) if ok.sum() > 30 else np.nan
+
+    rows, summary = [], []
     for k in [int(x) for x in k_grid.split(",")]:
         nb, _ = nbrs(k)
 
-        spread = np.empty(len(H))
+        spread = np.empty(n)
         for i, ix in enumerate(nb):
             P = H[ix]
             d = np.linalg.norm(P[:, None, :] - P[None, :, :], axis=-1)
             spread[i] = d[np.triu_indices(len(P), 1)].mean()
 
-        nl = int(np.max(gold)) + 1
-        het = np.empty(len(H))
-        for i, ix in enumerate(nb):
-            c = np.bincount(gold[ix], minlength=nl).astype(float)
-            p = c / max(c.sum(), 1e-12)
-            het[i] = -(p * np.log(np.clip(p, 1e-12, None))).sum()
+        if gold is not None:
+            nl = int(np.max(gold)) + 1
+            het = np.empty(n)
+            for i, ix in enumerate(nb):
+                c = np.bincount(gold[ix], minlength=nl).astype(float)
+                p = c / max(c.sum(), 1e-12)
+                het[i] = -(p * np.log(np.clip(p, 1e-12, None))).sum()
+        else:
+            het = np.full(n, np.nan)
 
         # Cross-fitted: neighbours searched only within training folds, so no
         # item contributes to its own prediction. Plain leave-one-out kNN on
         # the full set leaks through mutual neighbourhoods and inflates the
         # ceiling.
         rng = np.random.default_rng(seed)
-        fold = rng.integers(0, n_folds, len(H))
-        oracle = np.full(len(H), np.nan)
+        fold = rng.integers(0, n_folds, n)
+        oracle = np.full(n, np.nan)
         for f in range(n_folds):
             tr, te = np.where(fold != f)[0], np.where(fold == f)[0]
             if len(tr) <= k or len(te) == 0:
@@ -635,19 +681,32 @@ def neighbourhood(model: str, dataset: str, layer: int = -1,
         for name, v in (("nbhd_spread", spread),
                         ("nbhd_heterogeneity", het),
                         ("nbhd_oracle_CEILING", oracle)):
-            rows.append(pd.DataFrame(dict(item_id=ids, signal=name, k=k,
-                                          value=v)))
+            rows.append(pd.DataFrame(dict(item_id=ids, signal=name, k=k, value=v)))
+
+        # Oracle reported as BOTH rank correlation AND R^2 -- a ceiling given
+        # only as a rank correlation is hard to read as "how much is recoverable".
+        ok = np.isfinite(oracle) & np.isfinite(target)
+        ss_res = float(np.sum((target[ok] - oracle[ok]) ** 2))
+        ss_tot = float(np.sum((target[ok] - target[ok].mean()) ** 2))
+        r2 = 1.0 - ss_res / ss_tot if ss_tot > 0 else np.nan
+        summary.append(dict(k=k, rho_spread=sp(spread),
+                            rho_het=(sp(het) if gold is not None else np.nan),
+                            rho_oracle_CEILING=sp(oracle), oracle_R2_CEILING=r2))
 
     long = pd.concat(rows, ignore_index=True)
     long["model"] = model; long["dataset"] = dataset
-    long["layer"] = layer; long["scheme"] = scheme
-    long.to_parquet(f"{_dst(model, dataset)}/arr_nbhd_L{layer}_{scheme}"
+    long["layer"] = lyr; long["scheme"] = scheme
+    long.to_parquet(f"{_dst(model, dataset)}/arr_nbhd_L{lyr}_{scheme}"
                     f"_k{k_grid.replace(',', '-')}_s{seed}.parquet")
     vol.commit()
-    # TODO: report the oracle as BOTH Spearman against truth AND an R^2. A
-    #       ceiling expressed only as a rank correlation is hard to read as
-    #       "how much is recoverable".
-    return len(long)
+
+    sdf = pd.DataFrame(summary)
+    print(f"\n##### neighbourhood {model} / {dataset}  (layer {lyr}, n={n})")
+    print(sdf.round(4).to_string(index=False))
+    print("nbhd_oracle_CEILING is an ORACLE: it sees the target and is never "
+          "reported as a method. R^2 bounds how much annotator entropy is "
+          "locally recoverable in this representation.")
+    return sdf.to_dict("records")
 
 
 @app.function(image=image, volumes={"/vol": vol}, timeout=60 * 60 * 2)
