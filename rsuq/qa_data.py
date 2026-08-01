@@ -29,7 +29,12 @@ def load_halueval(n: int, task: str = "qa", seed: int = 0):
 
 def load_triviaqa(n: int, seed: int = 0):
     from datasets import load_dataset
-    ds = load_dataset("trivia_qa", "rc.nocontext", split="validation")
+    # namespaced repo, was "trivia_qa" (the bare alias no longer resolves)
+    ds = load_dataset("mandarjoshi/trivia_qa", "rc.nocontext", split="validation")
+    assert len(ds) > 1000, (
+        f"trivia_qa validation suspiciously small ({len(ds)} rows) — "
+        f"the repo or config may have changed structure"
+    )
     rng = random.Random(seed)
     idx = list(range(len(ds)))
     rng.shuffle(idx)
