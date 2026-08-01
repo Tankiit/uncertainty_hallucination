@@ -20,6 +20,7 @@ Results of the ARR **human-disagreement** pipeline, run 2026-07-31 over
 | `data/ce_decomp.csv` | AU/EU (aleatoric/epistemic) split on α + chaosnli: ρ(signal, AU) vs ρ(signal, EU) + h_mm, by family. |
 | `data/mechanism.csv` | Mechanism test: ρ(W,EU\|knn_dist) and the AU/EU partials — density explains the double inversion (4/5 cells). |
 | `data/neighbourhood.csv` | Neighbourhood reads + cross-fitted oracle ceiling (ρ and R²) per cell × k. |
+| `data/deferral_truthfulqa.csv/.json` | STC + full AURC-gap deferral verdict on truthfulqa (3 models × 3 arms), via the reconstructed `../screen.py`. |
 
 ## Headline
 

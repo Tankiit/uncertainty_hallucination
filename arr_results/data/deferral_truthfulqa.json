@@ -1,0 +1,134 @@
+{
+  "llama3_8b/truthfulqa": {
+    "N": 817,
+    "d": 4096,
+    "K": 50,
+    "pool": "last",
+    "arms": {
+      "geometric": {
+        "verdict": "DEFER: W adds info beyond logprob conf (mean gap +0.0563 > 0.02, 3/5 seeds CI-HELPS).",
+        "STC_mean": 0.013456140141671468,
+        "STC_std": 0.0825435000352382,
+        "aurc_conf": 0.5108996673374149,
+        "aurc_conf_plus_W": 0.4545749454512012,
+        "aurc_W_alone": 0.4916281961114118,
+        "gap_mean": 0.056324721886213715,
+        "gap_std": 0.023924882513594887,
+        "n_helps": 3,
+        "n_seeds": 5
+      },
+      "trained_supervised": {
+        "verdict": "DEFER: W adds info beyond logprob conf (mean gap +0.0583 > 0.02, 3/5 seeds CI-HELPS).",
+        "STC_mean": 0.009783831054769952,
+        "STC_std": 0.07344577047299375,
+        "aurc_conf": 0.5108996673374149,
+        "aurc_conf_plus_W": 0.4525561877461741,
+        "aurc_W_alone": 0.4852569969758891,
+        "gap_mean": 0.05834347959124077,
+        "gap_std": 0.02304296200129474,
+        "n_helps": 3,
+        "n_seeds": 5
+      },
+      "trained_unsupervised": {
+        "verdict": "DEFER: W adds info beyond logprob conf (mean gap +0.0575 > 0.02, 3/5 seeds CI-HELPS).",
+        "STC_mean": NaN,
+        "STC_std": NaN,
+        "aurc_conf": 0.5108996673374149,
+        "aurc_conf_plus_W": 0.45338761728715865,
+        "aurc_W_alone": 0.48549608452413473,
+        "gap_mean": 0.057512050050256225,
+        "gap_std": 0.022825544155141847,
+        "n_helps": 3,
+        "n_seeds": 5
+      }
+    }
+  },
+  "mistral_7b/truthfulqa": {
+    "N": 817,
+    "d": 4096,
+    "K": 50,
+    "pool": "last",
+    "arms": {
+      "geometric": {
+        "verdict": "MARGINAL: mean gap +0.0352 > 0 but below noise floor or inconsistent (0/5 seeds CI-HELPS).",
+        "STC_mean": 0.004816324779063091,
+        "STC_std": 0.040751469809933986,
+        "aurc_conf": 0.48624669916997815,
+        "aurc_conf_plus_W": 0.45109539039372015,
+        "aurc_W_alone": 0.48185135414487734,
+        "gap_mean": 0.03515130877625807,
+        "gap_std": 0.015213718311748855,
+        "n_helps": 0,
+        "n_seeds": 5
+      },
+      "trained_supervised": {
+        "verdict": "MARGINAL: mean gap +0.0396 > 0 but below noise floor or inconsistent (0/5 seeds CI-HELPS).",
+        "STC_mean": 0.037943688534810935,
+        "STC_std": 0.050813945350395705,
+        "aurc_conf": 0.48624669916997815,
+        "aurc_conf_plus_W": 0.4466460505475848,
+        "aurc_W_alone": 0.46903552691515493,
+        "gap_mean": 0.03960064862239332,
+        "gap_std": 0.015799098284611103,
+        "n_helps": 0,
+        "n_seeds": 5
+      },
+      "trained_unsupervised": {
+        "verdict": "MARGINAL: mean gap +0.0369 > 0 but below noise floor or inconsistent (0/5 seeds CI-HELPS).",
+        "STC_mean": NaN,
+        "STC_std": NaN,
+        "aurc_conf": 0.48624669916997815,
+        "aurc_conf_plus_W": 0.44935831255985814,
+        "aurc_W_alone": 0.485246311491515,
+        "gap_mean": 0.03688838661011997,
+        "gap_std": 0.019020379357783886,
+        "n_helps": 0,
+        "n_seeds": 5
+      }
+    }
+  },
+  "qwen2_5_7b/truthfulqa": {
+    "N": 817,
+    "d": 3584,
+    "K": 50,
+    "pool": "last",
+    "arms": {
+      "geometric": {
+        "verdict": "MARGINAL: mean gap +0.0003 > 0 but below noise floor or inconsistent (0/5 seeds CI-HELPS).",
+        "STC_mean": 0.024475767763461043,
+        "STC_std": 0.034068832695984326,
+        "aurc_conf": 0.4727752203325745,
+        "aurc_conf_plus_W": 0.4725229043339649,
+        "aurc_W_alone": 0.47590244361787404,
+        "gap_mean": 0.0002523159986096646,
+        "gap_std": 0.026975242773036076,
+        "n_helps": 0,
+        "n_seeds": 5
+      },
+      "trained_supervised": {
+        "verdict": "MARGINAL: mean gap +0.0015 > 0 but below noise floor or inconsistent (0/5 seeds CI-HELPS).",
+        "STC_mean": 0.019579697238316082,
+        "STC_std": 0.02893258804040513,
+        "aurc_conf": 0.4727752203325745,
+        "aurc_conf_plus_W": 0.47128236504323145,
+        "aurc_W_alone": 0.46936920175004565,
+        "gap_mean": 0.0014928552893430868,
+        "gap_std": 0.027436745783411622,
+        "n_helps": 0,
+        "n_seeds": 5
+      },
+      "trained_unsupervised": {
+        "verdict": "ABSTAIN: W does not consistently beat logprob alone (mean gap -0.0095).",
+        "STC_mean": NaN,
+        "STC_std": NaN,
+        "aurc_conf": 0.4727752203325745,
+        "aurc_conf_plus_W": 0.4823190909119865,
+        "aurc_W_alone": 0.4846094753143569,
+        "gap_mean": -0.009543870579411995,
+        "gap_std": 0.034511410779776354,
+        "n_helps": 0,
+        "n_seeds": 5
+      }
+    }
+  }
+}
