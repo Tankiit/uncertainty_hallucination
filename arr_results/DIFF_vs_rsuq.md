@@ -81,6 +81,16 @@ column are **consistent** with the new decomposition:
    driven by the varying annotator count on Pavlick, confounding the deciding
    cells. The size-readout question is left inconclusive, not decided.
 
+## Bottom line
+
+The strongest defensible reading is not that `credal_width` is a universally
+superior uncertainty signal, but that in the cleanest cells it behaves like a
+negatively signed, size-like proxy for support/epistemic uncertainty after the
+shared density component is removed. The disagreement analysis therefore
+supports a narrower claim: the observed ARR gain is real in constrained settings,
+but it does not generalise cleanly to α or across Pavlick, and the broader
+interpretation as a general-purpose winner is not justified.
+
 ## Reproduce
 
 Every table here is regenerated from the volume by `../arr_modal.py`
