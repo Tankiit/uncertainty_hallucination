@@ -1,0 +1,96 @@
+{
+  "model": "llama3_8b",
+  "dataset": "pavlick_nli",
+  "layer": 32,
+  "n": 496,
+  "exact_equal_rows": 496,
+  "exact_equal_fraction": 1.0,
+  "max_abs_difference": 0.0,
+  "median_abs_difference": 0.0,
+  "max_relative_difference": 0.0,
+  "min_cosine": 0.9999998807907104,
+  "same_length_n": 496,
+  "same_length_exact_fraction": 1.0,
+  "different_length_exact_fraction": null,
+  "embedding_first_equal_fraction": 1.0,
+  "first_embedding_unique_correct": 1,
+  "different_first_answer_id_n": 496,
+  "equal_embedding_with_different_answer_id_n": 496,
+  "second_position_rows": 992,
+  "second_position_token_embedding_bijection": true,
+  "second_position_unique_first_answer_ids": 2,
+  "meta": {
+    "cell": "llama3_8b__pavlick_nli",
+    "model_id": "meta-llama/Llama-3.1-8B-Instruct",
+    "dataset": "pavlick_nli",
+    "kind": "disagreement",
+    "licence": "CC-BY-4.0",
+    "upstream": "Pavlick & Kwiatkowski 2019",
+    "redistributes_text": false,
+    "tier": "B",
+    "dtype": "bf16",
+    "n_total_layers": 32,
+    "captured_layers": [
+      0,
+      4,
+      9,
+      13,
+      18,
+      22,
+      27,
+      32
+    ],
+    "layer_semantics": "hidden_states index; 0 = embeddings",
+    "attention_layers": [
+      4,
+      9,
+      13,
+      18,
+      22,
+      27,
+      32
+    ],
+    "attention_semantics": "attn[i] is hidden layer attention_layers[i]; hidden layer 0 has no attention row",
+    "storage": "SPANS (n_ans_tok, d) fp16; poolings derived downstream",
+    "attention": "top-32 attended positions",
+    "topk": 50,
+    "n_items": 496,
+    "tokenizer": "meta-llama/Llama-3.1-8B-Instruct",
+    "sampling": "not captured (deferred; needs a second generation pass)",
+    "code_sha1": "4fd06c4bc3f0",
+    "timestamp": "2026-07-20T08:20:57Z"
+  },
+  "index_columns": [
+    "item_id",
+    "shard",
+    "licence",
+    "n_ctx",
+    "n_ans_tok_correct",
+    "n_ans_tok_wrong",
+    "degenerate_first_token",
+    "soft_labels"
+  ],
+  "boundary_examples": [
+    {
+      "item_id": 0,
+      "n_ctx": 52,
+      "n_ans_tok_correct": 3,
+      "n_ans_tok_wrong": 3,
+      "degenerate_first_token": false
+    },
+    {
+      "item_id": 1,
+      "n_ctx": 32,
+      "n_ans_tok_correct": 3,
+      "n_ans_tok_wrong": 3,
+      "degenerate_first_token": false
+    },
+    {
+      "item_id": 2,
+      "n_ctx": 57,
+      "n_ans_tok_correct": 3,
+      "n_ans_tok_wrong": 3,
+      "degenerate_first_token": false
+    }
+  ]
+}

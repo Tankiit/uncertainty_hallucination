@@ -1,0 +1,77 @@
+{
+  "outer_folds": 5,
+  "split_seed": 20261007,
+  "frame_seeds": [
+    0,
+    1,
+    2
+  ],
+  "K": 200,
+  "tau": 10.0,
+  "k": 10,
+  "scheme": "span_mean",
+  "arm": "correct",
+  "kmeans_n_init": 4,
+  "ridge_alpha": 1.0,
+  "bootstrap_B": 2000,
+  "primary": "MSE(baseline)-MSE(baseline_all_rs)",
+  "groups": {
+    "knn": [
+      "knn_dist"
+    ],
+    "knn_width": [
+      "knn_dist",
+      "credal_width"
+    ],
+    "output": [
+      "pred_entropy",
+      "pred_maxprob",
+      "pred_margin",
+      "neg_mean_logprob"
+    ],
+    "baseline": [
+      "pred_entropy",
+      "pred_maxprob",
+      "pred_margin",
+      "neg_mean_logprob",
+      "knn_dist"
+    ],
+    "rs_only": [
+      "size_only",
+      "credal_width",
+      "mass_entropy",
+      "one_minus_max"
+    ],
+    "baseline_size": [
+      "pred_entropy",
+      "pred_maxprob",
+      "pred_margin",
+      "neg_mean_logprob",
+      "knn_dist",
+      "size_only"
+    ],
+    "baseline_size_width": [
+      "pred_entropy",
+      "pred_maxprob",
+      "pred_margin",
+      "neg_mean_logprob",
+      "knn_dist",
+      "size_only",
+      "credal_width"
+    ],
+    "baseline_all_rs": [
+      "pred_entropy",
+      "pred_maxprob",
+      "pred_margin",
+      "neg_mean_logprob",
+      "knn_dist",
+      "size_only",
+      "credal_width",
+      "mass_entropy",
+      "one_minus_max"
+    ]
+  },
+  "target": "annotator entropy, nats",
+  "inference": "conditional item bootstrap of fixed OOF predictions; exploratory",
+  "limitation": "teacher-forced crowd-selected answer states; not pre-answer UQ"
+}

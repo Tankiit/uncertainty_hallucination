@@ -1,0 +1,86 @@
+\definecolor{posEdge}{HTML}{2166AC}
+\definecolor{ink}{HTML}{30343B}
+\definecolor{rule}{HTML}{D1D5DB}
+\definecolor{nodeFill}{HTML}{F7F7F8}
+\definecolor{humFill}{HTML}{EAF2F8}
+\definecolor{modelFill}{HTML}{F1F3F5}
+\definecolor{barHum}{HTML}{2166AC}
+\definecolor{barMdl}{HTML}{4D4D4D}
+
+\newcommand{\ARRglyph}[4]{%
+  \begin{tikzpicture}[baseline=-0.35ex,x=1mm,y=1mm]
+    \fill[#1] (0,0) rectangle (1.7,#2);
+    \fill[#1] (2.2,0) rectangle (3.9,#3);
+    \fill[#1] (4.4,0) rectangle (6.1,#4);
+    \draw[ink,line width=.3pt] (-.25,0)--(6.35,0);
+  \end{tikzpicture}}
+
+\begin{figure*}[t]
+\centering
+\begin{tikzpicture}[
+  x=1cm,y=1cm,
+  every node/.style={font=\scriptsize,text=ink},
+  card/.style={draw=ink!75,fill=nodeFill,rounded corners=2pt,
+    line width=.45pt,inner sep=4pt,align=center,minimum height=9mm},
+  human/.style={card,fill=humFill},
+  model/.style={card,fill=modelFill},
+  signal/.style={card,text width=2.55cm},
+  flow/.style={-{Stealth[length=1.8mm]},draw=ink!72,line width=.55pt},
+  assoc/.style={-{Stealth[length=2.1mm]},line width=1.35pt},
+  heading/.style={font=\scriptsize\bfseries,text=ink,anchor=west}]
+
+  \node[heading] at (-.8,2.55) {1\quad ITEM};
+  \node[heading] at (2.25,2.55) {2\quad TWO READOUTS};
+  \node[heading] at (6.05,2.55) {3\quad TWO SIGNALS};
+  \node[heading] at (10.0,2.55) {4\quad TARGET};
+  \draw[rule,line width=.45pt] (-.8,2.25)--(13.35,2.25);
+
+  \node[human,text width=2.1cm] (item) at (0.2,.4)
+    {\textbf{ChaosNLI item}\\premise + hypothesis};
+
+  \node[human,text width=2.4cm] (hum) at (3.35,1.15)
+    {\ARRglyph{barHum}{5.0}{3.0}{1.3}\quad
+     \textbf{human labels}\\[1pt]$\phum$ from repeated annotation};
+  \node[model,text width=2.4cm] (mdl) at (3.35,-1.0)
+    {\ARRglyph{barMdl}{5.8}{1.9}{.9}\quad
+     \textbf{frozen LLM} $\times3$\\[1pt]hidden states + $\pmdl$};
+  \draw[flow] (item.east) to[out=18,in=180] (hum.west);
+  \draw[flow] (item.east) to[out=-18,in=180] (mdl.west);
+
+  \node[signal] (raw) at (6.85,.45)
+    {\textbf{raw geometry}\\$\knndist$\; (nearest-neighbour distance)};
+  \node[signal] (framed) at (6.85,-1.15)
+    {\textbf{random-set frame}\\$\regsize,\,\Wcredal$\; (cluster + mass)};
+  \draw[flow] (mdl.east) to[out=15,in=185] (raw.west);
+  \draw[flow] (mdl.east) to[out=-10,in=175] (framed.west);
+
+  \node[card,text width=3.0cm,minimum height=20mm] (loss) at (11.7,.2) {};
+  \node[font=\scriptsize\bfseries] at (11.7,.92) {forecast loss};
+  \draw[rule] (10.2,.63)--(13.2,.63);
+  \draw[rule] (11.7,-.55)--(11.7,.63);
+  \node[align=center,text width=1.35cm] (entropy) at (10.94,-.02)
+    {$H(\phum)$\\[-1pt]{\tiny irreducible}};
+  \node[align=center,text width=1.35cm] (divergence) at (12.46,-.02)
+    {$D(\phum\|\pmdl)$\\[-1pt]{\tiny divergence}};
+  \node[font=\normalsize] at (11.7,-.02) {$+$};
+  \draw[flow] (hum.east) to[out=8,in=160] (loss.north west);
+  \draw[flow] (mdl.east) to[out=-24,in=-155] (loss.south west);
+
+  \draw[assoc,draw=posEdge] (raw.east) to[out=5,in=170]
+    node[pos=.44,above=1pt,font=\scriptsize\bfseries,text=posEdge]
+    {$+$ association} (divergence.west);
+  \draw[assoc,draw=ink] (framed.east) to[out=-2,in=-160]
+    node[pos=.45,below=1pt,font=\scriptsize\bfseries,text=ink]
+    {$-$ association} (divergence.south west);
+
+\end{tikzpicture}
+
+\caption{%
+Overview of the comparison. Human annotations define $\phum$, while frozen
+language models provide hidden states and $\pmdl$. We summarize each
+hidden-state neighbourhood using either nearest-neighbour distance or
+random-set quantities. Forecast loss decomposes into irreducible label
+uncertainty and model--human divergence. The $+$ and $-$ arrows indicate the
+directions of association.}
+\label{fig:setup}
+\end{figure*}

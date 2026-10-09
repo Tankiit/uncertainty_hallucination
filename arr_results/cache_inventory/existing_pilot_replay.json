@@ -1,0 +1,118 @@
+{
+  "cache": "/Users/cril/tanmoy/research/Deferal_Models/LearningtoCalibrate-aistats-2027/mondrian/runs/popqa_seed0_group_scaling",
+  "output_hash_checks": {
+    "M12_sets.npz": true,
+    "M16_sets.npz": true,
+    "M1_sets.npz": true,
+    "M24_sets.npz": true,
+    "M2_sets.npz": true,
+    "M32_sets.npz": true,
+    "M3_sets.npz": true,
+    "M4_sets.npz": true,
+    "M6_sets.npz": true,
+    "M8_sets.npz": true,
+    "M_star.csv": true,
+    "bootstrap.npz": true,
+    "draws.npz": true,
+    "losses.csv": true,
+    "losses.npz": true,
+    "partitions.npz": true,
+    "plan.json": true,
+    "results.json": true
+  },
+  "replay": [
+    {
+      "goal": "average",
+      "n_cal": 50,
+      "M_star": 1,
+      "matches_saved": true
+    },
+    {
+      "goal": "average",
+      "n_cal": 100,
+      "M_star": 2,
+      "matches_saved": true
+    },
+    {
+      "goal": "average",
+      "n_cal": 200,
+      "M_star": 2,
+      "matches_saved": true
+    },
+    {
+      "goal": "average",
+      "n_cal": 400,
+      "M_star": 12,
+      "matches_saved": true
+    },
+    {
+      "goal": "average",
+      "n_cal": 800,
+      "M_star": 24,
+      "matches_saved": true
+    },
+    {
+      "goal": "spread",
+      "n_cal": 50,
+      "M_star": 32,
+      "matches_saved": true
+    },
+    {
+      "goal": "spread",
+      "n_cal": 100,
+      "M_star": 32,
+      "matches_saved": true
+    },
+    {
+      "goal": "spread",
+      "n_cal": 200,
+      "M_star": 2,
+      "matches_saved": true
+    },
+    {
+      "goal": "spread",
+      "n_cal": 400,
+      "M_star": 32,
+      "matches_saved": true
+    },
+    {
+      "goal": "spread",
+      "n_cal": 800,
+      "M_star": 24,
+      "matches_saved": true
+    },
+    {
+      "goal": "worst_group",
+      "n_cal": 50,
+      "M_star": 2,
+      "matches_saved": true
+    },
+    {
+      "goal": "worst_group",
+      "n_cal": 100,
+      "M_star": 2,
+      "matches_saved": true
+    },
+    {
+      "goal": "worst_group",
+      "n_cal": 200,
+      "M_star": 2,
+      "matches_saved": true
+    },
+    {
+      "goal": "worst_group",
+      "n_cal": 400,
+      "M_star": 2,
+      "matches_saved": true
+    },
+    {
+      "goal": "worst_group",
+      "n_cal": 800,
+      "M_star": 24,
+      "matches_saved": true
+    }
+  ],
+  "classification": "exploratory illustrative pilot; not a confirmatory test of pointwise theory",
+  "plan_created_utc": "2026-09-28T15:44:55.738350+00:00",
+  "estimand_note": "Referenced 2026-10-02 note is absent from this local reports directory"
+}

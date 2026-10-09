@@ -1,0 +1,96 @@
+{
+  "model": "mistral_7b",
+  "dataset": "chaosnli_alpha",
+  "layer": 32,
+  "n": 1532,
+  "exact_equal_rows": 344,
+  "exact_equal_fraction": 0.2245430809399478,
+  "max_abs_difference": 3.0,
+  "median_abs_difference": 1.0,
+  "max_relative_difference": 0.02556818164885044,
+  "min_cosine": 0.9996641278266907,
+  "same_length_n": 199,
+  "same_length_exact_fraction": 1.0,
+  "different_length_exact_fraction": 0.10877719429857464,
+  "embedding_first_equal_fraction": 1.0,
+  "first_embedding_unique_correct": 1,
+  "different_first_answer_id_n": 765,
+  "equal_embedding_with_different_answer_id_n": 765,
+  "second_position_rows": 3064,
+  "second_position_token_embedding_bijection": true,
+  "second_position_unique_first_answer_ids": 465,
+  "meta": {
+    "cell": "mistral_7b__chaosnli_alpha",
+    "model_id": "mistralai/Mistral-7B-Instruct-v0.3",
+    "dataset": "chaosnli_alpha",
+    "kind": "disagreement",
+    "licence": "CC-BY-NC-4.0",
+    "upstream": "ChaosNLI-alphaNLI (Nie et al. 2020) over ART \u2014 NON-COMMERCIAL",
+    "redistributes_text": false,
+    "tier": "B",
+    "dtype": "bf16",
+    "n_total_layers": 32,
+    "captured_layers": [
+      0,
+      4,
+      9,
+      13,
+      18,
+      22,
+      27,
+      32
+    ],
+    "layer_semantics": "hidden_states index; 0 = embeddings",
+    "attention_layers": [
+      4,
+      9,
+      13,
+      18,
+      22,
+      27,
+      32
+    ],
+    "attention_semantics": "attn[i] is hidden layer attention_layers[i]; hidden layer 0 has no attention row",
+    "storage": "SPANS (n_ans_tok, d) fp16; poolings derived downstream",
+    "attention": "top-32 attended positions",
+    "topk": 50,
+    "n_items": 1532,
+    "tokenizer": "mistralai/Mistral-7B-Instruct-v0.3",
+    "sampling": "not captured (deferred; needs a second generation pass)",
+    "code_sha1": "4fd06c4bc3f0",
+    "timestamp": "2026-07-20T08:21:04Z"
+  },
+  "index_columns": [
+    "item_id",
+    "shard",
+    "licence",
+    "n_ctx",
+    "n_ans_tok_correct",
+    "n_ans_tok_wrong",
+    "degenerate_first_token",
+    "soft_labels"
+  ],
+  "boundary_examples": [
+    {
+      "item_id": 0,
+      "n_ctx": 41,
+      "n_ans_tok_correct": 15,
+      "n_ans_tok_wrong": 9,
+      "degenerate_first_token": true
+    },
+    {
+      "item_id": 1,
+      "n_ctx": 30,
+      "n_ans_tok_correct": 7,
+      "n_ans_tok_wrong": 6,
+      "degenerate_first_token": false
+    },
+    {
+      "item_id": 2,
+      "n_ctx": 48,
+      "n_ans_tok_correct": 16,
+      "n_ans_tok_wrong": 10,
+      "degenerate_first_token": false
+    }
+  ]
+}

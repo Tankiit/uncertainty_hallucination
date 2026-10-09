@@ -1,0 +1,31 @@
+{
+  "model": "qwen2_5_7b",
+  "dataset": "pavlick_nli",
+  "pooling": "first stored span position / last prompt token",
+  "K": 200,
+  "tau": 10.0,
+  "frame_seeds": [
+    0,
+    1,
+    2
+  ],
+  "n_init": 4,
+  "outer_folds": 5,
+  "split_seed": 20261007,
+  "inner_folds": 3,
+  "inner_seed": 42,
+  "alphas": [
+    0.1,
+    1.0,
+    10.0,
+    100.0,
+    1000.0,
+    10000.0
+  ],
+  "bootstrap_B": 2000,
+  "prediction": "Raw h probe will be competitive with or stronger than A+RS; D-C may be uncertain.",
+  "status": "Exploratory selected strongest prior cell; not unseen confirmation",
+  "tuning": "Transforms and ridge alpha selected by inner CV on outer training data; RS frame built once per outer training fold",
+  "hidden_probe_dtype": "float64; original cached states remain float32 for frame fitting",
+  "interpretation": "RS provides derived nonlinear/structured features, never new information absent from h plus fitted frame"
+}
